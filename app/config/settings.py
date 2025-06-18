@@ -10,7 +10,11 @@ class Settings(BaseSettings):
     SECRET_KEY: str = secrets.token_urlsafe(32)
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 60 * 24 * 8  # 8 days
     ALGORITHM: str = "HS256"
-    
+    DB_HOST: str
+    DB_PORT: str
+    DB_NAME: str
+    DB_USER: str
+    DB_PASSWORD: str    
     # Database settings
     DATABASE_URL: str = "postgresql://postgres:postgres@localhost:5432/fastapi_modular"
     
