@@ -2,10 +2,12 @@
 Database models for Proz Profile module.
 File location: app/modules/proz/models/proz.py
 """
-
-from sqlalchemy import Column, String, Text, Integer, Numeric, ForeignKey, Enum, Boolean, Float
-from sqlalchemy.orm import relationship
+import uuid
 import enum
+
+from sqlalchemy import Column, String, Text, Integer, Numeric, ForeignKey, Enum, Boolean, Float, DateTime, func
+from sqlalchemy.orm import relationship
+from sqlalchemy.dialects.postgresql import UUID
 
 from app.database.base_class import Base
 
@@ -15,47 +17,71 @@ class VerificationStatus(str, enum.Enum):
     VERIFIED = "verified"
     REJECTED = "rejected"
 
-# app/modules/proz/models/proz.py (enhanced profile model)
+
 class ProzProfile(Base):
-    """Professional Profile Model"""
+    __tablename__ = "proz_profiles"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4, index=True)
+    
+    # Basic Information
     first_name = Column(String(100), nullable=False)
     last_name = Column(String(100), nullable=False)
-    email = Column(String(255), unique=True, nullable=False, index=True)
+    email = Column(String(255), unique=True, index=True, nullable=False)
     phone_number = Column(String(20), nullable=True)
-    profile_image_url = Column(String(255), nullable=True)
+    
+    # Profile Image
+    profile_image_url = Column(String(500), nullable=True)
+    
+    # Professional Information
     bio = Column(Text, nullable=True)
-    location = Column(String(100), nullable=True)  # City, State format
+    location = Column(String(255), nullable=True)
     years_experience = Column(Integer, nullable=True)
-    hourly_rate = Column(Numeric(10, 2), nullable=True)
-    availability = Column(String(100), nullable=True)  # e.g. "Weekdays, Evenings"
-    verification_status = Column(
-        Enum(VerificationStatus),
-        default=VerificationStatus.PENDING,
-        nullable=False
-    )
+    hourly_rate = Column(Float, nullable=True)
+    availability = Column(String(50), nullable=True)  # full-time, part-time, contract
+    
+    # Education & Skills
+    education = Column(Text, nullable=True)
+    certifications = Column(Text, nullable=True)
+    
+    # Social & Contact
+    website = Column(String(255), nullable=True)
+    linkedin = Column(String(255), nullable=True)
+    preferred_contact_method = Column(String(50), default="email")
+    
+    # Status & Verification
+    verification_status = Column(String(20), default="pending")  # pending, verified, rejected
     is_featured = Column(Boolean, default=False)
-    rating = Column(Float, default=0.0)  # Average rating
+    
+    # Ratings & Reviews
+    rating = Column(Float, default=0.0)
     review_count = Column(Integer, default=0)
+    
+    # Account Status
     email_verified = Column(Boolean, default=False)
-    verification_token = Column(String(100), nullable=True)
     
-    # Additional professional fields
-    
-    education = Column(Text, nullable=True)  # Education background
-    certifications = Column(Text, nullable=True)  # Professional certifications
-    website = Column(String(255), nullable=True)  # Professional website
-    linkedin = Column(String(255), nullable=True)  # LinkedIn profile
-    preferred_contact_method = Column(String(50), nullable=True)  # Email, Phone, etc.
+    # Timestamps
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 
-   
-        
+    def __repr__(self):
+        return f"<ProzProfile(id={self.id}, name={self.first_name} {self.last_name}, email={self.email})>"
+
     # Relationships
     specialties = relationship("ProzSpecialty", back_populates="proz_profile", cascade="all, delete-orphan")
     reviews = relationship("Review", back_populates="proz_profile", cascade="all, delete-orphan")
 
+
 class Specialty(Base):
     """Specialty Model"""
+    __tablename__ = "specialties"
+    
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4, index=True)
     name = Column(String(100), nullable=False, unique=True)
+    description = Column(Text, nullable=True)
+    
+    # Timestamps
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
     
     # Relationships
     proz_profiles = relationship("ProzSpecialty", back_populates="specialty")
@@ -65,20 +91,48 @@ class ProzSpecialty(Base):
     """Junction Table for Proz Profiles and Specialties"""
     __tablename__ = "proz_specialty"
     
-    proz_id = Column(String, ForeignKey("prozprofile.id"), primary_key=True)
-    specialty_id = Column(String, ForeignKey("specialty.id"), primary_key=True)
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4, index=True)
+    
+    # Fixed Foreign Keys - changed from "prozprofile.id" to "proz_profiles.id"
+    proz_id = Column(UUID(as_uuid=True), ForeignKey("proz_profiles.id"), nullable=False)
+    specialty_id = Column(UUID(as_uuid=True), ForeignKey("specialties.id"), nullable=False)
+    
+    # Timestamps
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
     
     # Relationships
     proz_profile = relationship("ProzProfile", back_populates="specialties")
     specialty = relationship("Specialty", back_populates="proz_profiles")
+    
+    # Ensure unique combinations
+    __table_args__ = (
+        {"extend_existing": True}
+    )
 
 
 class Review(Base):
     """Review Model"""
-    proz_id = Column(String, ForeignKey("prozprofile.id"), nullable=False)
+    __tablename__ = "reviews"
+    
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4, index=True)
+    
+    # Fixed Foreign Key - changed from "prozprofile.id" to "proz_profiles.id"
+    proz_id = Column(UUID(as_uuid=True), ForeignKey("proz_profiles.id"), nullable=False)
+    
     client_name = Column(String(100), nullable=False)
+    client_email = Column(String(255), nullable=True)
     rating = Column(Integer, nullable=False)  # 1-5 stars
     review_text = Column(Text, nullable=True)
     
+    # Review status
+    is_approved = Column(Boolean, default=False)
+    
+    # Timestamps
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+    
     # Relationships
     proz_profile = relationship("ProzProfile", back_populates="reviews")
+    
+    def __repr__(self):
+        return f"<Review(id={self.id}, proz_id={self.proz_id}, rating={self.rating})>"

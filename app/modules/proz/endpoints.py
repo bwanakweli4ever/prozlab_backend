@@ -110,6 +110,35 @@ async def update_own_profile(
     
     return profile
 
+@router.patch("/profile", response_model=ProzProfileResponse)
+async def patch_own_profile(
+    profile_data: ProzProfileUpdate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(auth_service.get_current_user)
+):
+    """
+    Partially update your own professional profile (PATCH).
+    """
+    profile = db.query(ProzProfile).filter(ProzProfile.email == current_user.email).first()
+    
+    if not profile:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Professional profile not found. Please register first."
+        )
+    
+    # Only update fields that are provided (exclude_unset=True)
+    update_data = profile_data.dict(exclude_unset=True)
+    
+    for field, value in update_data.items():
+        if hasattr(profile, field):
+            setattr(profile, field, value)
+    
+    db.commit()
+    db.refresh(profile)
+    
+    return profile
+
 # Add to app/modules/proz/endpoints.py
 
 @router.get("/specialties", response_model=List[str])
