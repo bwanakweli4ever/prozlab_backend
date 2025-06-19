@@ -6,7 +6,7 @@ A FastAPI backend with a modular structure inspired by Laravel, providing a clea
 
 ### Prerequisites
 
-- Python 3.8+
+- Python 3.12
 - PostgreSQL
 
 ### Installation
