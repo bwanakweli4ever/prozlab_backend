@@ -15,7 +15,7 @@ logger = logging.getLogger(__name__)
 # Constants
 MAX_FILE_SIZE = getattr(settings, 'MAX_FILE_SIZE', 5 * 1024 * 1024)  # 5MB default
 UPLOAD_DIR = getattr(settings, 'UPLOAD_DIR', 'uploads')
-ALLOWED_IMAGE_TYPES = getattr(settings, 'ALLOWED_IMAGE_TYPES', 'jpg,jpeg,png,gif').split(',')
+ALLOWED_IMAGE_TYPES = settings.ALLOWED_IMAGE_TYPES
 
 # Image sizes for different use cases
 IMAGE_SIZES = {

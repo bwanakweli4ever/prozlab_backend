@@ -4,6 +4,8 @@ from app.config.settings import settings
 from app.modules.auth.routes import router as auth_router
 from app.modules.proz.routes import router as proz_router
 from app.modules.proz.controllers.admin_controller import router as admin_router
+from app.modules.tasks.controllers.task_controller import router as task_router
+
 
 
 api_router = APIRouter()
@@ -12,3 +14,4 @@ api_router = APIRouter()
 api_router.include_router(auth_router, prefix="/auth")
 api_router.include_router(proz_router, prefix="/proz")
 api_router.include_router(admin_router, prefix="/admin/proz", tags=["Admin - Profile Verification"])
+api_router.include_router(task_router, prefix="/tasks", tags=["Task Management"])

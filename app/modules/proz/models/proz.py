@@ -133,6 +133,9 @@ class Review(Base):
     
     # Relationships
     proz_profile = relationship("ProzProfile", back_populates="reviews")
+    task_assignments = relationship("TaskAssignment", back_populates="professional")
+    notifications = relationship("TaskNotification", back_populates="professional")
+
     
     def __repr__(self):
         return f"<Review(id={self.id}, proz_id={self.proz_id}, rating={self.rating})>"
