@@ -10,7 +10,7 @@ touch migrations/versions/__init__.py
 
 # Step 2: Reset the database completely
 echo "🗑️  Resetting database (with CASCADE to handle dependencies)..."
-psql -d prozlab_db -U proz_user << 'EOF'
+PGPASSWORD='Root@2022' psql -d prozlab_db -U proz_user <<'EOF'
 
 -- Drop all tables with CASCADE to handle foreign key dependencies
 DROP TABLE IF EXISTS task_notifications CASCADE;
