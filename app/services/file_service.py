@@ -144,7 +144,7 @@ class FileService:
                 self._resize_image(original_path, dimensions, size_path)
                 
                 # Generate URL (adjust based on your serving setup)
-                image_urls[size_name] = f"/static/profile_images/{size_name}/{unique_filename}"
+                image_urls[size_name] = f"/uploads/profile_images/{size_name}/{unique_filename}"
             
             # Clean up original if we only want processed versions
             # os.remove(original_path)  # Uncomment if you don't want to keep originals

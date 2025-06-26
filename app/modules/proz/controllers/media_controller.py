@@ -4,7 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File
 from sqlalchemy.orm import Session
 
 from app.database.session import get_db
-from app.modules.auth.services.auth_service import AuthService
+from app.modules.auth.services.auth_service import auth_service, get_current_user, get_current_superuser
 from app.modules.auth.models.user import User
 from app.modules.proz.models.proz import ProzProfile
 from app.modules.proz.schemas.files import (
@@ -13,7 +13,7 @@ from app.modules.proz.schemas.files import (
 from app.services.file_service import FileService
 
 router = APIRouter()
-auth_service = AuthService()
+# auth_service = AuthService()  # Using global instance
 file_service = FileService()
 
 
@@ -21,7 +21,7 @@ file_service = FileService()
 async def upload_profile_image(
     file: UploadFile = File(..., description="Profile image file"),
     db: Session = Depends(get_db),
-    current_user: User = Depends(auth_service.get_current_user)
+    current_user: User = Depends(get_current_user)
 ) -> Any:
     """
     Upload a profile image for the current user.
@@ -73,7 +73,7 @@ async def upload_profile_image(
 @router.delete("/delete-profile-image", response_model=ProfileImageResponse)
 async def delete_profile_image(
     db: Session = Depends(get_db),
-    current_user: User = Depends(auth_service.get_current_user)
+    current_user: User = Depends(get_current_user)
 ) -> Any:
     """
     Delete the current user's profile image.
@@ -113,7 +113,7 @@ async def delete_profile_image(
 @router.get("/profile-image-info")
 async def get_profile_image_info(
     db: Session = Depends(get_db),
-    current_user: User = Depends(auth_service.get_current_user)
+    current_user: User = Depends(get_current_user)
 ) -> Any:
     """
     Get information about the current user's profile image.
@@ -157,7 +157,7 @@ async def get_profile_image_info(
 async def update_profile_image_url(
     request: ProfileImageUpdateRequest,
     db: Session = Depends(get_db),
-    current_user: User = Depends(auth_service.get_current_user)
+    current_user: User = Depends(get_current_user)
 ) -> Any:
     """
     Update profile image URL (for external image URLs or cloud storage).
@@ -192,7 +192,7 @@ async def update_profile_image_url(
 @router.post("/admin/cleanup-orphaned-images")
 async def cleanup_orphaned_images(
     db: Session = Depends(get_db),
-    current_user: User = Depends(auth_service.get_current_superuser)
+    current_user: User = Depends(get_current_superuser)
 ) -> Any:
     """
     Admin endpoint to clean up orphaned image files.

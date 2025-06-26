@@ -7,7 +7,7 @@ from datetime import datetime, timedelta
 import math
 
 from app.database.session import get_db
-from app.modules.auth.services.auth_service import AuthService
+from app.modules.auth.services.auth_service import auth_service, get_current_user, get_current_superuser
 from app.modules.auth.models.user import User
 from app.modules.proz.models.proz import ProzProfile, Specialty, ProzSpecialty
 from app.modules.tasks.models.task import ServiceRequest, TaskAssignment, TaskNotification, TaskStatus, TaskPriority
@@ -25,7 +25,7 @@ from app.modules.tasks.schemas.task import (
 )
 
 router = APIRouter()
-auth_service = AuthService()
+# auth_service = AuthService()  # Using global instance
 
 
 # ==================== PUBLIC ENDPOINTS ====================
@@ -87,7 +87,7 @@ async def get_service_requests_admin(
     priority: Optional[str] = Query(None),
     category: Optional[str] = Query(None),
     db: Session = Depends(get_db),
-    current_user: User = Depends(auth_service.get_current_superuser)
+    current_user: User = Depends(get_current_superuser)
 ) -> Any:
     """
     Get service requests for admin management.
@@ -137,7 +137,7 @@ async def assign_task_to_professional(
     assignment: TaskAssignmentCreate,
     background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
-    current_user: User = Depends(auth_service.get_current_superuser)
+    current_user: User = Depends(get_current_superuser)
 ) -> Any:
     """
     Assign a service request to a professional.
@@ -237,7 +237,7 @@ async def get_task_assignments_admin(
     status: Optional[str] = Query(None),
     proz_id: Optional[str] = Query(None),
     db: Session = Depends(get_db),
-    current_user: User = Depends(auth_service.get_current_superuser)
+    current_user: User = Depends(get_current_superuser)
 ) -> Any:
     """
     Get all task assignments for admin overview.
@@ -276,7 +276,7 @@ async def get_task_assignments_admin(
 @router.get("/admin/stats", response_model=AdminTaskStatsResponse)
 async def get_admin_task_stats(
     db: Session = Depends(get_db),
-    current_user: User = Depends(auth_service.get_current_superuser)
+    current_user: User = Depends(get_current_superuser)
 ) -> Any:
     """
     Get task management statistics for admin dashboard.
@@ -333,7 +333,7 @@ async def get_admin_task_stats(
 async def get_professional_tasks(
     status: Optional[str] = Query(None),
     db: Session = Depends(get_db),
-    current_user: User = Depends(auth_service.get_current_user)
+    current_user: User = Depends(get_current_user)
 ) -> Any:
     """
     Get tasks assigned to the current professional.
@@ -397,7 +397,7 @@ async def respond_to_task_assignment(
     assignment_id: str,
     response: TaskResponseUpdate,
     db: Session = Depends(get_db),
-    current_user: User = Depends(auth_service.get_current_user)
+    current_user: User = Depends(get_current_user)
 ) -> Any:
     """
     Professional responds to task assignment (accept/reject/request info).
@@ -459,7 +459,7 @@ async def get_professional_notifications(
     unread_only: bool = Query(False),
     limit: int = Query(20, le=100),
     db: Session = Depends(get_db),
-    current_user: User = Depends(auth_service.get_current_user)
+    current_user: User = Depends(get_current_user)
 ) -> Any:
     """
     Get notifications for the current professional.
@@ -494,7 +494,7 @@ async def get_professional_notifications(
 async def mark_notification_read(
     notification_id: str,
     db: Session = Depends(get_db),
-    current_user: User = Depends(auth_service.get_current_user)
+    current_user: User = Depends(get_current_user)
 ) -> Any:
     """
     Mark a notification as read.
@@ -539,7 +539,7 @@ async def mark_notification_read(
 @router.get("/professional/dashboard-stats", response_model=DashboardStatsResponse)
 async def get_professional_dashboard_stats(
     db: Session = Depends(get_db),
-    current_user: User = Depends(auth_service.get_current_user)
+    current_user: User = Depends(get_current_user)
 ) -> Any:
     """
     Get dashboard statistics for the current professional.
@@ -638,7 +638,7 @@ async def update_task_status(
     new_status: str = Query(..., description="New status: in_progress, completed"),
     notes: Optional[str] = Query(None, description="Update notes"),
     db: Session = Depends(get_db),
-    current_user: User = Depends(auth_service.get_current_user)
+    current_user: User = Depends(get_current_user)
 ) -> Any:
     """
     Update task status (mark as in progress, completed, etc.).
@@ -731,7 +731,7 @@ async def auto_suggest_professionals(
     service_request_id: str,
     limit: int = Query(5, le=10),
     db: Session = Depends(get_db),
-    current_user: User = Depends(auth_service.get_current_superuser)
+    current_user: User = Depends(get_current_superuser)
 ) -> Any:
     """
     Auto-suggest professionals for a service request based on skills, location, etc.

@@ -1,15 +1,17 @@
 # app/modules/auth/controllers/auth_controller.py
 from typing import Any
+import traceback
 
-from fastapi import APIRouter, Depends, Body
+from fastapi import APIRouter, Depends, Body, HTTPException, status
 from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy.orm import Session
+from pydantic import ValidationError
 
 from app.database.session import get_db
 from app.modules.auth.schemas.user import User, UserCreate, Token, UserLogin
-from app.modules.auth.services.auth_service import AuthService
+from app.modules.auth.services.auth_service import auth_service, get_current_user, get_current_superuser
 
-auth_service = AuthService()
+# auth_service = AuthService()  # Using global instance
 
 router = APIRouter()
 
@@ -23,8 +25,41 @@ def register(
     """
     Register a new user.
     """
-    user = auth_service.create_user(db=db, user_in=user_in)
-    return user
+    try:
+        print(f"🔍 Registration attempt for: {user_in.email}")
+        print(f"🔍 User data: {user_in.model_dump()}")
+        
+        user = auth_service.create_user(db=db, user_in=user_in)
+        
+        print(f"✅ User created successfully: {user.id}")
+        return user
+        
+    except ValueError as e:
+        # Handle ValueError from our service (like "Email already registered")
+        print(f"❌ Value error: {str(e)}")
+        if "Email already registered" in str(e):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="A user with this email already exists"
+            )
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(e)
+        )
+    except ValidationError as e:
+        # Handle Pydantic validation errors
+        print(f"❌ Pydantic validation error: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid input data"
+        )
+    except Exception as e:
+        print(f"❌ Unexpected error in registration: {str(e)}")
+        print(f"❌ Traceback: {traceback.format_exc()}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Registration failed. Please try again."
+        )
 
 
 @router.post("/login", response_model=Token)
@@ -35,11 +70,18 @@ def login(
     """
     OAuth2 compatible token login, get an access token for future requests.
     """
-    user = auth_service.authenticate_user(
-        db=db, email=form_data.username, password=form_data.password
-    )
-    access_token = auth_service.generate_token(user_id=user.id)
-    return {"access_token": access_token, "token_type": "bearer"}
+    try:
+        user = auth_service.authenticate_user(
+            db=db, email=form_data.username, password=form_data.password
+        )
+        access_token = auth_service.generate_token(user_id=user.id)
+        return {"access_token": access_token, "token_type": "bearer"}
+    except Exception as e:
+        print(f"Login error: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Incorrect email or password"
+        )
 
 
 @router.post("/login/json", response_model=Token)
@@ -50,20 +92,36 @@ def login_json(
     """
     JSON login, get an access token for future requests.
     """
-    user = auth_service.authenticate_user(
-        db=db, email=login_data.email, password=login_data.password
-    )
-    access_token = auth_service.generate_token(user_id=user.id)
-    return {"access_token": access_token, "token_type": "bearer"}
+    try:
+        user = auth_service.authenticate_user(
+            db=db, email=login_data.email, password=login_data.password
+        )
+        access_token = auth_service.generate_token(user_id=user.id)
+        return {"access_token": access_token, "token_type": "bearer"}
+    except Exception as e:
+        print(f"JSON login error: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Incorrect email or password"
+        )
 
 
 @router.get("/me", response_model=User)
 def read_users_me(
+    db: Session = Depends(get_db),
     current_user: User = Depends(auth_service.get_current_user),
 ) -> Any:
     """
-    Get current user.
+    Get the current user.
     """
+    if not current_user:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Not authenticated",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+    
+    print(f"🔍 Current user: {current_user.email}")
     return current_user
 
 

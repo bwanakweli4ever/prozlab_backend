@@ -1,11 +1,8 @@
-"""
-Schemas for Proz Profile module.
-File location: app/modules/proz/schemas/proz.py
-"""
-
+# app/modules/proz/schemas/proz.py
 from typing import Optional, List
-from pydantic import BaseModel, EmailStr, Field
+from pydantic import BaseModel, EmailStr, Field, ConfigDict
 from datetime import datetime
+import uuid
 import enum
 
 
@@ -15,7 +12,6 @@ class VerificationStatus(str, enum.Enum):
     REJECTED = "rejected"
 
 
-# app/modules/proz/schemas/proz.py (enhanced schemas)
 class ProzProfileBase(BaseModel):
     first_name: str
     last_name: str
@@ -54,13 +50,15 @@ class ProzProfileUpdate(BaseModel):
 
 
 class ProzProfileResponse(ProzProfileBase):
-    id: str
-    verification_status: VerificationStatus
-    is_featured: bool
-    rating: float
-    review_count: int
-    email_verified: bool
+    id: uuid.UUID  # Change from str to uuid.UUID
+    user_id: Optional[uuid.UUID] = None  # Add user_id field
+    profile_image_url: Optional[str] = None
+    verification_status: str = "pending"  # Changed from enum to str for simplicity
+    is_featured: bool = False
+    rating: float = 0.0
+    review_count: int = 0
+    email_verified: bool = False
     created_at: datetime
+    updated_at: Optional[datetime] = None
     
-    class Config:
-        orm_mode = True
+    model_config = ConfigDict(from_attributes=True)

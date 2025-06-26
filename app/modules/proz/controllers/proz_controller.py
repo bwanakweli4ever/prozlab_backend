@@ -1,23 +1,16 @@
-"""
-Controller for Proz Profile module.
-File location: app/modules/proz/controllers/proz_controller.py
-"""
-
 from typing import List, Optional
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
 from app.database.session import get_db
-from app.modules.auth.services.auth_service import AuthService
+from app.modules.auth.services.auth_service import auth_service, get_current_user, get_current_superuser
 from app.modules.auth.models.user import User
 from app.modules.proz.models.proz import ProzProfile, Specialty
 from app.modules.proz.schemas.proz import ProzProfileCreate, ProzProfileResponse, ProzProfileUpdate
 
-# Import router from routes.py
-from app.modules.proz.routes import router
-
+router = APIRouter()
 # Get auth service for user authentication
-auth_service = AuthService()
+# auth_service = AuthService()  # Using global instance
 
 @router.post("/register", response_model=ProzProfileResponse, status_code=status.HTTP_201_CREATED)
 async def register_profile(
@@ -57,7 +50,7 @@ async def register_profile(
 @router.get("/profile", response_model=ProzProfileResponse)
 async def get_own_profile(
     db: Session = Depends(get_db),
-    current_user: User = Depends(auth_service.get_current_user)
+    current_user: User = Depends(get_current_user)
 ):
     """
     Get your own professional profile.
@@ -76,7 +69,7 @@ async def get_own_profile(
 async def update_own_profile(
     profile_data: ProzProfileUpdate,
     db: Session = Depends(get_db),
-    current_user: User = Depends(auth_service.get_current_user)
+    current_user: User = Depends(get_current_user)
 ):
     """
     Update your own professional profile.

@@ -1,14 +1,15 @@
-# app/modules/auth/router.py
+# app/modules/auth/routes.py - CORRECTED
 from fastapi import APIRouter
 from app.modules.auth.controllers import auth_controller, otp_controller, email_controller
 
+# Create the main auth router
 router = APIRouter()
 
-# Authentication routes
-router.include_router(auth_controller.router, prefix="/auth", tags=["Authentication"])
+# Include auth controller WITHOUT any prefix (base auth routes)
+router.include_router(auth_controller.router, tags=["Authentication"])
 
-# OTP routes
-router.include_router(otp_controller.router, prefix="/auth/otp", tags=["OTP Verification"])
+# # Include OTP controller with /otp prefix
+# router.include_router(otp_controller.router, prefix="/otp", tags=["OTP Verification"])
 
-# Email verification routes
-router.include_router(email_controller.router, prefix="/auth/email", tags=["Email Verification"])
+# # Include email controller with /email prefix  
+router.include_router(email_controller.router, prefix="/email", tags=["Email Verification"])

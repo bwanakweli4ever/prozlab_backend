@@ -7,7 +7,7 @@ from datetime import datetime, timedelta
 import math
 
 from app.database.session import get_db
-from app.modules.auth.services.auth_service import AuthService
+from app.modules.auth.services.auth_service import auth_service, get_current_user, get_current_superuser
 from app.modules.auth.models.user import User
 from app.modules.proz.models.proz import ProzProfile, Specialty, ProzSpecialty, Review
 from app.modules.proz.schemas.admin import (
@@ -24,13 +24,13 @@ from app.modules.proz.schemas.admin import (
 )
 
 router = APIRouter()
-auth_service = AuthService()
+# auth_service = AuthService()  # Using global instance
 
 
 @router.get("/dashboard", response_model=AdminDashboardResponse)
 async def get_admin_dashboard(
     db: Session = Depends(get_db),
-    current_user: User = Depends(auth_service.get_current_superuser)
+    current_user: User = Depends(get_current_superuser)
 ) -> Any:
     """
     Get admin dashboard overview with verification statistics.
@@ -112,7 +112,7 @@ async def get_profiles_for_verification(
     sort_by: str = Query("created_at", description="Sort by: created_at, updated_at, verification_status"),
     sort_order: str = Query("desc", description="Sort order: asc, desc"),
     db: Session = Depends(get_db),
-    current_user: User = Depends(auth_service.get_current_superuser)
+    current_user: User = Depends(get_current_superuser)
 ) -> Any:
     """
     Get paginated list of profiles for admin verification.
@@ -162,7 +162,7 @@ async def get_profiles_for_verification(
 async def get_profile_for_verification(
     profile_id: str,
     db: Session = Depends(get_db),
-    current_user: User = Depends(auth_service.get_current_superuser)
+    current_user: User = Depends(get_current_superuser)
 ) -> Any:
     """
     Get detailed profile information for verification review.
@@ -193,7 +193,7 @@ async def verify_profile(
     profile_id: str,
     request: ProfileVerificationRequest,
     db: Session = Depends(get_db),
-    current_user: User = Depends(auth_service.get_current_superuser)
+    current_user: User = Depends(get_current_superuser)
 ) -> Any:
     """
     Update profile verification status.
@@ -245,7 +245,7 @@ async def verify_profile(
 async def bulk_verify_profiles(
     request: BulkVerificationRequest,
     db: Session = Depends(get_db),
-    current_user: User = Depends(auth_service.get_current_superuser)
+    current_user: User = Depends(get_current_superuser)
 ) -> Any:
     """
     Bulk update verification status for multiple profiles.
@@ -296,7 +296,7 @@ async def toggle_profile_featured(
     profile_id: str,
     featured: bool = Query(..., description="Set featured status"),
     db: Session = Depends(get_db),
-    current_user: User = Depends(auth_service.get_current_superuser)
+    current_user: User = Depends(get_current_superuser)
 ) -> Any:
     """
     Toggle profile featured status.
@@ -332,7 +332,7 @@ async def toggle_profile_featured(
 @router.get("/stats", response_model=VerificationStatsAdmin)
 async def get_verification_stats(
     db: Session = Depends(get_db),
-    current_user: User = Depends(auth_service.get_current_superuser)
+    current_user: User = Depends(get_current_superuser)
 ) -> Any:
     """
     Get detailed verification statistics for admin dashboard.
@@ -382,7 +382,7 @@ async def delete_profile(
     profile_id: str,
     reason: str = Query(..., description="Reason for deletion"),
     db: Session = Depends(get_db),
-    current_user: User = Depends(auth_service.get_current_superuser)
+    current_user: User = Depends(get_current_superuser)
 ) -> Any:
     """
     Delete a profile (admin only, for policy violations, etc.).

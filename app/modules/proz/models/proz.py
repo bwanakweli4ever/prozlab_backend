@@ -1,7 +1,4 @@
-"""
-Database models for Proz Profile module.
-File location: app/modules/proz/models/proz.py
-"""
+# app/modules/proz/models/proz.py
 import uuid
 import enum
 
@@ -22,6 +19,9 @@ class ProzProfile(Base):
     __tablename__ = "proz_profiles"
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4, index=True)
+    
+    # Foreign key to User model - ADD THIS
+    user_id = Column(UUID(as_uuid=True), ForeignKey("users.id"), unique=True, nullable=True)
     
     # Basic Information
     first_name = Column(String(100), nullable=False)
@@ -67,8 +67,11 @@ class ProzProfile(Base):
         return f"<ProzProfile(id={self.id}, name={self.first_name} {self.last_name}, email={self.email})>"
 
     # Relationships
+    user = relationship("User", backref="proz_profile")  # ADD THIS
     specialties = relationship("ProzSpecialty", back_populates="proz_profile", cascade="all, delete-orphan")
     reviews = relationship("Review", back_populates="proz_profile", cascade="all, delete-orphan")
+    task_assignments = relationship("TaskAssignment", back_populates="professional")
+    notifications = relationship("TaskNotification", back_populates="professional")
 
 
 class Specialty(Base):
@@ -93,7 +96,7 @@ class ProzSpecialty(Base):
     
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4, index=True)
     
-    # Fixed Foreign Keys - changed from "prozprofile.id" to "proz_profiles.id"
+    # Foreign Keys
     proz_id = Column(UUID(as_uuid=True), ForeignKey("proz_profiles.id"), nullable=False)
     specialty_id = Column(UUID(as_uuid=True), ForeignKey("specialties.id"), nullable=False)
     
@@ -103,11 +106,6 @@ class ProzSpecialty(Base):
     # Relationships
     proz_profile = relationship("ProzProfile", back_populates="specialties")
     specialty = relationship("Specialty", back_populates="proz_profiles")
-    
-    # Ensure unique combinations
-    __table_args__ = (
-        {"extend_existing": True}
-    )
 
 
 class Review(Base):
@@ -116,7 +114,7 @@ class Review(Base):
     
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4, index=True)
     
-    # Fixed Foreign Key - changed from "prozprofile.id" to "proz_profiles.id"
+    # Foreign Key
     proz_id = Column(UUID(as_uuid=True), ForeignKey("proz_profiles.id"), nullable=False)
     
     client_name = Column(String(100), nullable=False)
@@ -133,9 +131,6 @@ class Review(Base):
     
     # Relationships
     proz_profile = relationship("ProzProfile", back_populates="reviews")
-    task_assignments = relationship("TaskAssignment", back_populates="professional")
-    notifications = relationship("TaskNotification", back_populates="professional")
-
     
     def __repr__(self):
         return f"<Review(id={self.id}, proz_id={self.proz_id}, rating={self.rating})>"
