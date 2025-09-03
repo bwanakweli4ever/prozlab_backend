@@ -1,6 +1,6 @@
 # app/modules/proz/schemas/proz.py
 from typing import Optional, List
-from pydantic import BaseModel, EmailStr, Field, ConfigDict
+from pydantic import BaseModel, EmailStr, Field, ConfigDict, field_validator
 from datetime import datetime
 import uuid
 import enum
@@ -47,6 +47,36 @@ class ProzProfileUpdate(BaseModel):
     website: Optional[str] = None
     linkedin: Optional[str] = None
     preferred_contact_method: Optional[str] = None
+    profile_image_url: Optional[str] = None
+    
+    # Validation for numeric fields
+    @field_validator('years_experience')
+    @classmethod
+    def validate_years_experience(cls, v):
+        if v is not None and v < 0:
+            raise ValueError('Years of experience cannot be negative')
+        return v
+    
+    @field_validator('hourly_rate')
+    @classmethod
+    def validate_hourly_rate(cls, v):
+        if v is not None and v < 0:
+            raise ValueError('Hourly rate cannot be negative')
+        return v
+    
+    @field_validator('availability')
+    @classmethod
+    def validate_availability(cls, v):
+        if v is not None and v not in ['full-time', 'part-time', 'contract', 'freelance']:
+            raise ValueError('Availability must be one of: full-time, part-time, contract, freelance')
+        return v
+    
+    @field_validator('preferred_contact_method')
+    @classmethod
+    def validate_contact_method(cls, v):
+        if v is not None and v not in ['email', 'phone', 'linkedin', 'website']:
+            raise ValueError('Preferred contact method must be one of: email, phone, linkedin, website')
+        return v
 
 
 class ProzProfileResponse(ProzProfileBase):

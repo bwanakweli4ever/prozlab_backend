@@ -7,6 +7,7 @@ from app.modules.auth.services.auth_service import auth_service, get_current_use
 from app.modules.auth.models.user import User
 from app.modules.proz.models.proz import ProzProfile, Specialty
 from app.modules.proz.schemas.proz import ProzProfileCreate, ProzProfileResponse, ProzProfileUpdate
+from app.modules.proz.services.proz_service import ProzService
 
 router = APIRouter()
 # Get auth service for user authentication
@@ -104,3 +105,32 @@ async def update_own_profile(
     db.refresh(profile)
     
     return profile
+
+@router.patch("/profile", response_model=ProzProfileResponse)
+async def patch_own_profile(
+    profile_data: ProzProfileUpdate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """
+    Partially update your own professional profile using PATCH method.
+    Only provided fields will be updated.
+    """
+    proz_service = ProzService()
+    
+    try:
+        updated_profile = proz_service.update_profile_by_email(
+            db=db,
+            email=current_user.email,
+            profile_data=profile_data
+        )
+        return updated_profile
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"❌ Error updating profile: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to update profile. Please try again later."
+        )

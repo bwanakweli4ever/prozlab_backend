@@ -15,8 +15,8 @@ from app.modules.proz.repositories.proz_repository import (
 )
 from app.modules.proz.models.proz import ProzProfile, Specialty, ProzSpecialty, Review, VerificationStatus
 from app.modules.proz.schemas.proz import (
-    ProzProfileCreate, ProzProfileUpdate, VerificationUpdate, 
-    ProzProfileResponse, ProzProfileDetailResponse, PaginatedProzProfiles
+    ProzProfileCreate, ProzProfileUpdate, 
+    ProzProfileResponse
 )
 from app.config.settings import settings
 
@@ -47,7 +47,7 @@ class ProzService:
         min_experience: Optional[int] = None,
         max_rate: Optional[float] = None,
         availability: Optional[str] = None,
-    ) -> PaginatedProzProfiles:
+    ) -> List[ProzProfileResponse]:
         """Get all verified profiles with optional filtering and pagination"""
         skip = (page - 1) * limit
         
@@ -63,19 +63,14 @@ class ProzService:
             verification_status=VerificationStatus.VERIFIED
         )
         
-        return PaginatedProzProfiles(
-            professionals=[ProzProfileResponse.from_orm(p) for p in profiles],
-            total=total,
-            page=page,
-            limit=limit
-        )
+        return [ProzProfileResponse.model_validate(p) for p in profiles]
     
     def get_featured_profiles(self, db: Session, limit: int = 10) -> List[ProzProfileResponse]:
         """Get featured verified profiles"""
         profiles = self.profile_repo.get_featured(db=db, limit=limit)
-        return [ProzProfileResponse.from_orm(p) for p in profiles]
+        return [ProzProfileResponse.model_validate(p) for p in profiles]
     
-    def get_profile_by_id(self, db: Session, profile_id: str) -> ProzProfileDetailResponse:
+    def get_profile_by_id(self, db: Session, profile_id: str) -> ProzProfileResponse:
         """Get a profile by ID with detailed information including reviews"""
         profile = self.profile_repo.get_by_id(db=db, profile_id=profile_id)
         if not profile or profile.verification_status != VerificationStatus.VERIFIED:
@@ -84,10 +79,10 @@ class ProzService:
                 detail="Professional profile not found"
             )
         
-        return ProzProfileDetailResponse.from_orm(profile)
+        return ProzProfileResponse.model_validate(profile)
     
     def create_profile(self, db: Session, profile_data: ProzProfileCreate) -> ProzProfileResponse:
-        """Create a new professional profile with specialties"""
+        """Create a new professional profile"""
         # Check for existing profile with same email
         existing_profile = self.profile_repo.get_by_email(db=db, email=profile_data.email)
         if existing_profile:
@@ -96,22 +91,11 @@ class ProzService:
                 detail="A profile with this email already exists"
             )
         
-        # Process specialties
-        specialties = []
-        for specialty_id in profile_data.specialties:
-            specialty = self.specialty_repo.get_by_id(db=db, specialty_id=specialty_id)
-            if not specialty:
-                raise HTTPException(
-                    status_code=status.HTTP_400_BAD_REQUEST,
-                    detail=f"Specialty with ID {specialty_id} not found"
-                )
-            specialties.append(specialty)
-        
         # Create profile
-        profile_dict = profile_data.dict(exclude={"specialties"})
-        profile = self.profile_repo.create(db=db, profile_data=profile_dict, specialties=specialties)
+        profile_dict = profile_data.model_dump()
+        profile = self.profile_repo.create(db=db, profile_data=profile_dict)
         
-        return ProzProfileResponse.from_orm(profile)
+        return ProzProfileResponse.model_validate(profile)
     
     def update_profile(
         self, 
@@ -137,21 +121,35 @@ class ProzService:
                     detail="A profile with this email already exists"
                 )
         
-        # Process specialties if provided
-        specialties = None
-        if profile_data.specialties is not None:
-            specialties = []
-            for specialty_id in profile_data.specialties:
-                specialty = self.specialty_repo.get_by_id(db=db, specialty_id=specialty_id)
-                if not specialty:
-                    raise HTTPException(
-                        status_code=status.HTTP_400_BAD_REQUEST,
-                        detail=f"Specialty with ID {specialty_id} not found"
-                    )
-                specialties.append(specialty)
-        
         # Update profile
-        profile_dict = profile_data.dict(exclude={"specialties"}, exclude_unset=True)
-        updated_profile = self.profile_repo.update(db=db, profile=profile, update_data=profile_dict, specialties=specialties)
+        profile_dict = profile_data.model_dump(exclude_unset=True)
+        updated_profile = self.profile_repo.update(db=db, profile=profile, update_data=profile_dict)
         
-        return ProzProfileResponse.from_orm(updated_profile)
+        return ProzProfileResponse.model_validate(updated_profile)
+    
+    def update_profile_by_email(
+        self, 
+        db: Session, 
+        email: str, 
+        profile_data: ProzProfileUpdate
+    ) -> ProzProfileResponse:
+        """Update a professional profile by email address"""
+        # Get profile by email
+        profile = self.profile_repo.get_by_email(db=db, email=email)
+        if not profile:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Professional profile not found"
+            )
+        
+        # Convert to dict and exclude None values
+        update_dict = profile_data.model_dump(exclude_unset=True)
+        
+        # Update profile fields
+        updated_profile = self.profile_repo.update(
+            db=db, 
+            profile=profile, 
+            update_data=update_dict
+        )
+        
+        return ProzProfileResponse.model_validate(updated_profile)

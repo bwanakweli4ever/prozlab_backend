@@ -5,7 +5,7 @@ from app.config.settings import settings
 from app.modules.auth.routes import router as auth_router
 from app.modules.proz.routes import router as proz_router
 from app.modules.proz.controllers.admin_controller import router as admin_router
-from app.modules.tasks.controllers.task_controller import router as task_router
+from app.modules.tasks.routes import router as task_router
 
 # Create main API router
 api_router = APIRouter()

@@ -1,5 +1,5 @@
 # app/modules/tasks/schemas/task.py
-from pydantic import BaseModel, Field, EmailStr
+from pydantic import BaseModel, Field, EmailStr, field_validator
 from typing import Optional, List
 from datetime import datetime
 import uuid
@@ -7,20 +7,20 @@ from enum import Enum
 
 
 class TaskStatusEnum(str, Enum):
-    PENDING = "pending"
-    ASSIGNED = "assigned"
-    ACCEPTED = "accepted"
-    IN_PROGRESS = "in_progress"
-    COMPLETED = "completed"
-    CANCELLED = "cancelled"
-    REJECTED = "rejected"
+    PENDING = "PENDING"
+    ASSIGNED = "ASSIGNED"
+    ACCEPTED = "ACCEPTED"
+    IN_PROGRESS = "IN_PROGRESS"
+    COMPLETED = "COMPLETED"
+    CANCELLED = "CANCELLED"
+    REJECTED = "REJECTED"
 
 
 class TaskPriorityEnum(str, Enum):
-    LOW = "low"
-    MEDIUM = "medium"
-    HIGH = "high"
-    URGENT = "urgent"
+    LOW = "LOW"
+    MEDIUM = "MEDIUM"
+    HIGH = "HIGH"
+    URGENT = "URGENT"
 
 
 class ServiceRequestCreate(BaseModel):
@@ -44,7 +44,7 @@ class ServiceRequestCreate(BaseModel):
 
 class ServiceRequestResponse(BaseModel):
     """Service request response"""
-    id: uuid.UUID
+    id: str
     company_name: str
     client_name: str
     client_email: str
@@ -59,15 +59,35 @@ class ServiceRequestResponse(BaseModel):
     deadline: Optional[datetime]
     location_preference: Optional[str]
     remote_work_allowed: bool
-    status: TaskStatusEnum
-    priority: TaskPriorityEnum
+    status: str
+    priority: str
     admin_notes: Optional[str]
     created_at: datetime
-    updated_at: datetime
+    updated_at: Optional[datetime]
     assignments_count: int = 0
     
-    class Config:
-        from_attributes = True
+    @field_validator('id', mode='before')
+    @classmethod
+    def convert_uuid_to_string(cls, v):
+        if isinstance(v, uuid.UUID):
+            return str(v)
+        return v
+    
+    @field_validator('status', mode='before')
+    @classmethod
+    def convert_status_to_string(cls, v):
+        if hasattr(v, 'value'):
+            return v.value
+        return str(v)
+    
+    @field_validator('priority', mode='before')
+    @classmethod
+    def convert_priority_to_string(cls, v):
+        if hasattr(v, 'value'):
+            return v.value
+        return str(v)
+    
+    model_config = {"from_attributes": True}
 
 
 class TaskAssignmentCreate(BaseModel):
@@ -82,14 +102,14 @@ class TaskAssignmentCreate(BaseModel):
 
 class TaskAssignmentResponse(BaseModel):
     """Task assignment response"""
-    id: uuid.UUID
-    service_request_id: uuid.UUID
-    proz_id: uuid.UUID
-    assigned_by_user_id: Optional[uuid.UUID]
+    id: str
+    service_request_id: str
+    proz_id: str
+    assigned_by_user_id: Optional[str]
     assignment_notes: Optional[str]
     estimated_hours: Optional[float]
     proposed_rate: Optional[float]
-    status: TaskStatusEnum
+    status: str
     proz_response: Optional[str]
     proz_response_at: Optional[datetime]
     assigned_at: datetime
@@ -98,16 +118,50 @@ class TaskAssignmentResponse(BaseModel):
     
     # Nested objects
     service_request: ServiceRequestResponse
-    professional_name: str
-    professional_email: str
+    professional_name: Optional[str] = None
+    professional_email: Optional[str] = None
     
-    class Config:
-        from_attributes = True
+    @field_validator('id', mode='before')
+    @classmethod
+    def convert_id_to_string(cls, v):
+        if isinstance(v, uuid.UUID):
+            return str(v)
+        return v
+    
+    @field_validator('service_request_id', mode='before')
+    @classmethod
+    def convert_service_request_id_to_string(cls, v):
+        if isinstance(v, uuid.UUID):
+            return str(v)
+        return v
+    
+    @field_validator('proz_id', mode='before')
+    @classmethod
+    def convert_proz_id_to_string(cls, v):
+        if isinstance(v, uuid.UUID):
+            return str(v)
+        return v
+    
+    @field_validator('assigned_by_user_id', mode='before')
+    @classmethod
+    def convert_assigned_by_user_id_to_string(cls, v):
+        if isinstance(v, uuid.UUID):
+            return str(v)
+        return v
+    
+    @field_validator('status', mode='before')
+    @classmethod
+    def convert_status_to_string(cls, v):
+        if hasattr(v, 'value'):
+            return v.value
+        return str(v)
+    
+    model_config = {"from_attributes": True}
 
 
 class ProfessionalTaskResponse(BaseModel):
     """Task response for professional dashboard"""
-    assignment_id: uuid.UUID
+    assignment_id: str
     service_title: str
     company_name: str
     client_name: str
@@ -116,13 +170,36 @@ class ProfessionalTaskResponse(BaseModel):
     budget_range: Optional[str]
     estimated_hours: Optional[float]
     proposed_rate: Optional[float]
-    status: TaskStatusEnum
-    priority: TaskPriorityEnum
+    status: str
+    priority: str
     assignment_notes: Optional[str]
     assigned_at: datetime
     due_date: Optional[datetime]
     deadline: Optional[datetime]
     is_remote: bool
+    
+    @field_validator('assignment_id', mode='before')
+    @classmethod
+    def convert_uuid_to_string(cls, v):
+        if isinstance(v, uuid.UUID):
+            return str(v)
+        return v
+    
+    @field_validator('status', mode='before')
+    @classmethod
+    def convert_status_to_string(cls, v):
+        if hasattr(v, 'value'):
+            return v.value
+        return str(v)
+    
+    @field_validator('priority', mode='before')
+    @classmethod
+    def convert_priority_to_string(cls, v):
+        if hasattr(v, 'value'):
+            return v.value
+        return str(v)
+    
+    model_config = {"from_attributes": True}
 
 
 class TaskResponseUpdate(BaseModel):
@@ -142,8 +219,7 @@ class NotificationResponse(BaseModel):
     created_at: datetime
     task_assignment_id: Optional[uuid.UUID]
     
-    class Config:
-        from_attributes = True
+    model_config = {"from_attributes": True}
 
 
 class DashboardStatsResponse(BaseModel):

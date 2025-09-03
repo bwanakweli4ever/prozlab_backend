@@ -8,6 +8,9 @@ sys.path.append(str(Path(__file__).parent.parent))
 from app.database.base_class import Base  # Import Base from the right location
 from app.modules.proz.models.proz import ProzProfile, Specialty, ProzSpecialty, Review, VerificationStatus
 from app.modules.auth.models.user import User  # Import all models
+from app.modules.auth.models.otp import OTPVerification
+from app.modules.auth.models.password_reset import PasswordResetToken
+from app.modules.tasks.models.task import ServiceRequest, TaskAssignment, TaskNotification
 from logging.config import fileConfig
 
 from sqlalchemy import engine_from_config
