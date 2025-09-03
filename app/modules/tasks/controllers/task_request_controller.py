@@ -7,6 +7,7 @@ from app.database.session import get_db
 from app.modules.auth.services.auth_service import get_current_user, get_current_superuser
 from app.modules.auth.models.user import User
 from app.modules.tasks.services.task_request_service import TaskRequestService
+from app.services.notification_service import NotificationService
 from app.modules.tasks.schemas.task_request import (
     BusinessTaskRequestCreate,
     BusinessTaskRequestResponse,
@@ -28,6 +29,7 @@ task_request_service = TaskRequestService()
 @router.post("/business-requests", response_model=BusinessTaskRequestResponse, status_code=status.HTTP_201_CREATED)
 async def create_business_task_request(
     request: BusinessTaskRequestCreate,
+    background_tasks: BackgroundTasks,
     db: Session = Depends(get_db)
 ) -> Any:
     """
@@ -43,6 +45,23 @@ async def create_business_task_request(
     """
     try:
         response = task_request_service.create_business_task_request(db, request)
+        
+        # Send email notification to admin about new service request
+        admin_user = db.query(User).filter(User.is_superuser == True).first()
+        if admin_user:
+            background_tasks.add_task(
+                send_service_request_notification,
+                admin_user.email,
+                f"{admin_user.first_name} {admin_user.last_name}",
+                request.company_name,
+                request.client_name,
+                request.client_email,
+                request.service_title,
+                request.service_description,
+                request.priority.value if hasattr(request.priority, 'value') else str(request.priority),
+                response.created_at.isoformat()
+            )
+        
         return response
         
     except Exception as e:
@@ -353,3 +372,43 @@ async def get_assignment_details(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to retrieve assignment details."
         )
+
+
+# ==================== HELPER FUNCTIONS ====================
+
+async def send_service_request_notification(
+    admin_email: str,
+    admin_name: str,
+    company_name: str,
+    client_name: str,
+    client_email: str,
+    service_title: str,
+    service_description: str,
+    priority: str,
+    created_at: str
+):
+    """
+    Send email notification to admin about new service request.
+    This is a background task.
+    """
+    try:
+        notification_service = NotificationService()
+        result = notification_service.send_service_request_notification(
+            admin_email=admin_email,
+            admin_name=admin_name,
+            company_name=company_name,
+            client_name=client_name,
+            client_email=client_email,
+            service_title=service_title,
+            service_description=service_description,
+            priority=priority,
+            created_at=created_at
+        )
+        
+        if result["success"]:
+            print(f"✅ Service request notification sent to {admin_email}")
+        else:
+            print(f"❌ Failed to send service request notification to {admin_email}: {result.get('message', 'Unknown error')}")
+            
+    except Exception as e:
+        print(f"❌ Error sending service request notification to {admin_email}: {str(e)}")

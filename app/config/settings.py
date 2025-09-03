@@ -25,6 +25,7 @@ class Settings(BaseSettings):
     SMTP_USER: Optional[str] = None
     SMTP_PASSWORD: Optional[str] = None
     EMAIL_FROM: Optional[str] = None
+    MAIL_SUPPORT: Optional[str] = None
 
     # Twilio
     TWILIO_ACCOUNT_SID: Optional[str] = None

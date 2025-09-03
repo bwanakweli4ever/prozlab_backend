@@ -11,6 +11,7 @@ from app.modules.auth.services.auth_service import auth_service, get_current_use
 from app.modules.auth.models.user import User
 from app.modules.proz.models.proz import ProzProfile, Specialty, ProzSpecialty
 from app.modules.tasks.models.task import ServiceRequest, TaskAssignment, TaskNotification, TaskStatus, TaskPriority
+from app.services.notification_service import NotificationService
 from app.modules.tasks.schemas.task import (
     ServiceRequestCreate,
     ServiceRequestResponse,
@@ -217,8 +218,15 @@ async def assign_task_to_professional(
     background_tasks.add_task(
         send_assignment_notification,
         professional.email,
+        f"{professional.first_name} {professional.last_name}",
         service_request.service_title,
-        service_request.company_name
+        service_request.company_name,
+        service_request.client_name,
+        service_request.service_description,
+        assignment.assignment_notes,
+        assignment.due_date.isoformat() if assignment.due_date else None,
+        assignment.estimated_hours,
+        assignment.proposed_rate
     )
     
     # Build response
@@ -396,6 +404,7 @@ async def get_professional_tasks(
 async def respond_to_task_assignment(
     assignment_id: str,
     response: TaskResponseUpdate,
+    background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ) -> Any:
@@ -445,6 +454,35 @@ async def respond_to_task_assignment(
         assignment.service_request.status = TaskStatus.ACCEPTED
     
     db.commit()
+    
+    # Send email notification to admin about the response
+    # Get admin user (assuming first superuser for now)
+    admin_user = db.query(User).filter(User.is_superuser == True).first()
+    if admin_user:
+        if response.response_action == "accept":
+            # Send task accepted notification
+            background_tasks.add_task(
+                send_task_accepted_notification,
+                admin_user.email,
+                f"{admin_user.first_name} {admin_user.last_name}",
+                f"{professional.first_name} {professional.last_name}",
+                assignment.service_request.service_title,
+                assignment.service_request.company_name,
+                assignment.service_request.client_name,
+                datetime.utcnow().isoformat()
+            )
+        elif response.response_action == "reject":
+            # Send task rejected notification
+            background_tasks.add_task(
+                send_task_rejected_notification,
+                admin_user.email,
+                f"{admin_user.first_name} {admin_user.last_name}",
+                f"{professional.first_name} {professional.last_name}",
+                assignment.service_request.service_title,
+                assignment.service_request.company_name,
+                assignment.service_request.client_name,
+                response.response_message
+            )
     
     return {
         "success": True,
@@ -706,24 +744,110 @@ async def update_task_status(
 
 async def send_assignment_notification(
     professional_email: str,
+    professional_name: str,
     service_title: str,
-    company_name: str
+    company_name: str,
+    client_name: str,
+    service_description: str,
+    assignment_notes: str = None,
+    due_date: str = None,
+    estimated_hours: float = None,
+    proposed_rate: float = None
 ):
     """
     Send email notification to professional about new task assignment.
     This is a background task.
     """
-    # TODO: Implement email sending logic
-    # For now, just log the notification
-    print(f"📧 Email notification sent to {professional_email}")
-    print(f"   Subject: New Task Assignment: {service_title}")
-    print(f"   Company: {company_name}")
-    
-    # In production, you would use an email service like:
-    # - SendGrid
-    # - AWS SES
-    # - FastAPI-Mail
-    # etc.
+    try:
+        notification_service = NotificationService()
+        result = notification_service.send_task_assignment_notification(
+            professional_email=professional_email,
+            professional_name=professional_name,
+            service_title=service_title,
+            company_name=company_name,
+            client_name=client_name,
+            service_description=service_description,
+            assignment_notes=assignment_notes,
+            due_date=due_date,
+            estimated_hours=estimated_hours,
+            proposed_rate=proposed_rate
+        )
+        
+        if result["success"]:
+            print(f"✅ Task assignment email sent to {professional_email}")
+        else:
+            print(f"❌ Failed to send task assignment email to {professional_email}: {result.get('message', 'Unknown error')}")
+            
+    except Exception as e:
+        print(f"❌ Error sending task assignment email to {professional_email}: {str(e)}")
+
+
+async def send_task_accepted_notification(
+    admin_email: str,
+    admin_name: str,
+    professional_name: str,
+    service_title: str,
+    company_name: str,
+    client_name: str,
+    accepted_at: str
+):
+    """
+    Send email notification to admin about task acceptance.
+    This is a background task.
+    """
+    try:
+        notification_service = NotificationService()
+        result = notification_service.send_task_accepted_notification(
+            admin_email=admin_email,
+            admin_name=admin_name,
+            professional_name=professional_name,
+            service_title=service_title,
+            company_name=company_name,
+            client_name=client_name,
+            accepted_at=accepted_at
+        )
+        
+        if result["success"]:
+            print(f"✅ Task accepted email sent to {admin_email}")
+        else:
+            print(f"❌ Failed to send task accepted email to {admin_email}: {result.get('message', 'Unknown error')}")
+            
+    except Exception as e:
+        print(f"❌ Error sending task accepted email to {admin_email}: {str(e)}")
+
+
+async def send_task_rejected_notification(
+    admin_email: str,
+    admin_name: str,
+    professional_name: str,
+    service_title: str,
+    company_name: str,
+    client_name: str,
+    rejection_reason: str = None
+):
+    """
+    Send email notification to admin about task rejection.
+    This is a background task.
+    """
+    try:
+        notification_service = NotificationService()
+        result = notification_service.send_task_rejected_notification(
+            admin_email=admin_email,
+            admin_name=admin_name,
+            professional_name=professional_name,
+            service_title=service_title,
+            company_name=company_name,
+            client_name=client_name,
+            rejection_reason=rejection_reason
+        )
+        
+        if result["success"]:
+            print(f"✅ Task rejected email sent to {admin_email}")
+        else:
+            print(f"❌ Failed to send task rejected email to {admin_email}: {result.get('message', 'Unknown error')}")
+            
+    except Exception as e:
+        print(f"❌ Error sending task rejected email to {admin_email}: {str(e)}")
 
 
 @router.get("/auto-suggest-professionals", response_model=List[dict])
