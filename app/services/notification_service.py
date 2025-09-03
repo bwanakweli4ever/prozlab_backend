@@ -29,6 +29,8 @@ class NotificationService:
             return self._create_verification_email(**kwargs)
         elif template_type == "password_reset":
             return self._create_password_reset_email(**kwargs)
+        elif template_type == "profile_verification":
+            return self._create_profile_verification_email(**kwargs)
         else:
             raise ValueError(f"Unknown template type: {template_type}")
     
@@ -537,6 +539,129 @@ class NotificationService:
         
         return subject, html_body, text_body
     
+    def _create_profile_verification_email(self, user_name: str, is_approved: Optional[bool] = None,
+                                         admin_notes: Optional[str] = None, rejection_reason: Optional[str] = None,
+                                         new_status: Optional[str] = None, old_status: Optional[str] = None) -> tuple:
+        """Create profile verification status change email"""
+        from app.config.settings import settings
+        
+        if is_approved is True:
+            subject = f"🎉 Your Professional Profile Has Been Verified - {settings.PROJECT_NAME}"
+            status_message = "Your professional profile has been successfully verified!"
+            color = "#4CAF50"
+            next_steps = "You can now start accepting task assignments and building your reputation on our platform."
+        elif is_approved is False:
+            subject = f"Profile Verification Update - {settings.PROJECT_NAME}"
+            status_message = "Your professional profile requires additional review."
+            color = "#FF9800"
+            next_steps = "Please review the feedback below and update your profile accordingly. You can resubmit for verification once you've made the necessary changes."
+        else:
+            subject = f"Profile Status Update - {settings.PROJECT_NAME}"
+            status_message = f"Your profile status has been updated from '{old_status}' to '{new_status}'."
+            color = "#2196F3"
+            next_steps = "Please check your dashboard for any additional requirements."
+        
+        # Create HTML body
+        html_body = f"""
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <meta charset="utf-8">
+            <title>Profile Verification Update</title>
+            <style>
+                body {{ font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px; }}
+                .header {{ background-color: {color}; color: white; padding: 20px; text-align: center; border-radius: 5px 5px 0 0; }}
+                .content {{ background-color: #f9f9f9; padding: 30px; border-radius: 0 0 5px 5px; }}
+                .status-box {{ background-color: #fff; padding: 20px; border-radius: 5px; margin: 20px 0; border-left: 4px solid {color}; }}
+                .button {{ display: inline-block; padding: 12px 24px; background-color: {color}; color: white; text-decoration: none; border-radius: 5px; margin: 10px 0; }}
+                .footer {{ text-align: center; margin-top: 30px; color: #666; font-size: 12px; }}
+                .admin-notes {{ background-color: #fff3cd; border: 1px solid #ffeaa7; padding: 15px; border-radius: 5px; margin: 15px 0; }}
+                .warning {{ background-color: #f8d7da; border: 1px solid #f5c6cb; padding: 15px; border-radius: 5px; margin: 15px 0; color: #721c24; }}
+            </style>
+        </head>
+        <body>
+            <div class="header">
+                <h1>Profile Verification Update</h1>
+            </div>
+            <div class="content">
+                <h2>Hello {user_name}!</h2>
+                
+                <div class="status-box">
+                    <h3>{status_message}</h3>
+                    <p>{next_steps}</p>
+                </div>
+        """
+        
+        if admin_notes:
+            html_body += f"""
+                <div class="admin-notes">
+                    <h4>Administrative Notes:</h4>
+                    <p>{admin_notes}</p>
+                </div>
+            """
+        
+        if rejection_reason:
+            html_body += f"""
+                <div class="warning">
+                    <h4>Reason for Review:</h4>
+                    <p>{rejection_reason}</p>
+                </div>
+            """
+        
+        html_body += f"""
+                <p>
+                    <a href="http://localhost:3001/dashboard" class="button">View Your Dashboard</a>
+                </p>
+                
+                <p>If you have any questions, please contact our support team at {settings.MAIL_SUPPORT or 'support@prozlab.com'}.</p>
+                
+                <p>Best regards,<br>The {settings.PROJECT_NAME} Team</p>
+            </div>
+            <div class="footer">
+                <p>This email was sent from {settings.PROJECT_NAME}</p>
+                <p>Please do not reply to this email.</p>
+            </div>
+        </body>
+        </html>
+        """
+        
+        # Create text body
+        text_body = f"""
+        Profile Verification Update
+        
+        Hello {user_name}!
+        
+        {status_message}
+        
+        {next_steps}
+        """
+        
+        if admin_notes:
+            text_body += f"""
+        
+        Administrative Notes:
+        {admin_notes}
+        """
+        
+        if rejection_reason:
+            text_body += f"""
+        
+        Reason for Review:
+        {rejection_reason}
+        """
+        
+        text_body += f"""
+        
+        View your dashboard: http://localhost:3001/dashboard
+        
+        If you have any questions, please contact our support team at {settings.MAIL_SUPPORT or 'support@prozlab.com'}.
+        
+        Best regards,
+        The {settings.PROJECT_NAME} Team
+        """
+        
+        return subject, html_body, text_body
+    
     def send_notification(self, template_type: str, to_email: str, to_name: str = None, **kwargs) -> Dict[str, Any]:
         """Send notification email"""
         try:
@@ -675,4 +800,27 @@ class NotificationService:
             to_name=user_name,
             user_name=user_name,
             reset_url=reset_url
+        )
+    
+    def send_profile_verification_notification(
+        self, 
+        user_email: str, 
+        user_name: str, 
+        is_approved: Optional[bool] = None,
+        admin_notes: Optional[str] = None,
+        rejection_reason: Optional[str] = None,
+        new_status: Optional[str] = None,
+        old_status: Optional[str] = None
+    ) -> Dict[str, Any]:
+        """Send profile verification status change notification"""
+        return self.send_notification(
+            template_type="profile_verification",
+            to_email=user_email,
+            to_name=user_name,
+            user_name=user_name,
+            is_approved=is_approved,
+            admin_notes=admin_notes,
+            rejection_reason=rejection_reason,
+            new_status=new_status,
+            old_status=old_status
         )

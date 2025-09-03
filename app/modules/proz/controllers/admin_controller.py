@@ -1,6 +1,6 @@
 # app/modules/proz/controllers/admin_controller.py
 from typing import Any, List, Optional
-from fastapi import APIRouter, Depends, HTTPException, status, Query
+from fastapi import APIRouter, Depends, HTTPException, status, Query, BackgroundTasks
 from sqlalchemy.orm import Session
 from sqlalchemy import func, and_, or_, desc
 from datetime import datetime, timedelta
@@ -10,6 +10,7 @@ from app.database.session import get_db
 from app.modules.auth.services.auth_service import auth_service, get_current_user, get_current_superuser
 from app.modules.auth.models.user import User
 from app.modules.proz.models.proz import ProzProfile, Specialty, ProzSpecialty, Review
+from app.services.notification_service import NotificationService
 from app.modules.proz.schemas.admin import (
     ProfileVerificationRequest,
     ProfileVerificationResponse,
@@ -192,6 +193,7 @@ async def get_profile_for_verification(
 async def verify_profile(
     profile_id: str,
     request: ProfileVerificationRequest,
+    background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_superuser)
 ) -> Any:
@@ -227,7 +229,20 @@ async def verify_profile(
     db.commit()
     db.refresh(profile)
     
-    # TODO: Send notification email to user about verification status change
+    # Send notification email to user about verification status change
+    # Use profile email directly since user relationship might not be loaded
+    user_email = profile.email
+    user_name = f"{profile.first_name} {profile.last_name}".strip() or "Professional"
+    
+    background_tasks.add_task(
+        send_verification_notification,
+        user_email,
+        user_name,
+        new_status,
+        old_status,
+        request.admin_notes,
+        request.rejection_reason
+    )
     
     return ProfileVerificationResponse(
         success=True,
@@ -418,3 +433,49 @@ async def delete_profile(
         "message": "Profile deleted successfully",
         "deleted_profile": profile_info
     }
+
+
+def send_verification_notification(
+    user_email: str,
+    user_name: str,
+    new_status: str,
+    old_status: str,
+    admin_notes: Optional[str] = None,
+    rejection_reason: Optional[str] = None
+):
+    """
+    Send verification status change notification to user.
+    """
+    try:
+        notification_service = NotificationService()
+        
+        if new_status == "verified":
+            notification_service.send_profile_verification_notification(
+                user_email=user_email,
+                user_name=user_name,
+                is_approved=True,
+                admin_notes=admin_notes
+            )
+        elif new_status == "rejected":
+            notification_service.send_profile_verification_notification(
+                user_email=user_email,
+                user_name=user_name,
+                is_approved=False,
+                admin_notes=admin_notes,
+                rejection_reason=rejection_reason
+            )
+        else:
+            # For other status changes (pending, etc.)
+            notification_service.send_profile_verification_notification(
+                user_email=user_email,
+                user_name=user_name,
+                is_approved=None,  # Status change notification
+                admin_notes=admin_notes,
+                new_status=new_status,
+                old_status=old_status
+            )
+            
+        print(f"✅ Profile verification email sent to {user_email}")
+        
+    except Exception as e:
+        print(f"❌ Failed to send verification email to {user_email}: {str(e)}")
