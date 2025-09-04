@@ -259,6 +259,7 @@ async def verify_profile(
 @router.post("/profiles/bulk-verify", response_model=BulkVerificationResponse)
 async def bulk_verify_profiles(
     request: BulkVerificationRequest,
+    background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_superuser)
 ) -> Any:
@@ -277,6 +278,19 @@ async def bulk_verify_profiles(
                 profile.verification_status = request.verification_status.value
                 profile.updated_at = datetime.utcnow()
                 updated_count += 1
+                
+                # Queue email notification per profile update (no admin notes/rejection reason in bulk)
+                user_email = profile.email
+                user_name = f"{profile.first_name} {profile.last_name}".strip() or "Professional"
+                background_tasks.add_task(
+                    send_verification_notification,
+                    user_email,
+                    user_name,
+                    request.verification_status.value,
+                    old_status,
+                    None,
+                    None
+                )
             else:
                 failed_updates.append({
                     "profile_id": str(profile_id),
