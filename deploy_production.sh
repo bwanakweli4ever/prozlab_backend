@@ -85,14 +85,24 @@ if [ -f ".env" ]; then
             fi
         fi
     done < .env
+    
+    # Debug: Show loaded database values
+    log "Loaded environment variables:"
+    echo "  DB_HOST: $DB_HOST"
+    echo "  DB_PORT: $DB_PORT"
+    echo "  DB_NAME: $DB_NAME"
+    echo "  DB_USER: $DB_USER"
+    echo "  DB_PASSWORD: ***MASKED***"
 else
     error ".env file not found"
 fi
 
 # 7. Check database connection
 log "Testing database connection..."
-python -c "
+# Test with explicit environment variables
+DB_HOST="$DB_HOST" DB_PORT="$DB_PORT" DB_NAME="$DB_NAME" DB_USER="$DB_USER" DB_PASSWORD="$DB_PASSWORD" python -c "
 import sys
+import os
 sys.path.append('.')
 from app.config.database import engine
 from sqlalchemy import text
@@ -100,6 +110,7 @@ try:
     with engine.connect() as conn:
         conn.execute(text('SELECT 1'))
     print('✅ Database connection successful')
+    print(f'Connected to: {os.getenv(\"DB_HOST\")}:{os.getenv(\"DB_PORT\")}/{os.getenv(\"DB_NAME\")} as {os.getenv(\"DB_USER\")}')
 except Exception as e:
     print(f'❌ Database connection failed: {e}')
     sys.exit(1)
