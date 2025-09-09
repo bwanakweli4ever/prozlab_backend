@@ -66,7 +66,18 @@ fi
 
 # 6. Load environment variables
 log "Loading environment variables..."
-export $(grep -v '^#' .env | xargs)
+# Load .env file safely, ignoring comments and empty lines
+if [ -f ".env" ]; then
+    while IFS= read -r line; do
+        # Skip empty lines and comments
+        if [[ -n "$line" && ! "$line" =~ ^[[:space:]]*# ]]; then
+            # Export the variable
+            export "$line"
+        fi
+    done < .env
+else
+    error ".env file not found"
+fi
 
 # 7. Check database connection
 log "Testing database connection..."

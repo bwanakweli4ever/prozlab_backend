@@ -49,7 +49,14 @@ source venv/bin/activate
 # 4. Load environment variables
 if [ -f ".env" ]; then
     log "Loading environment variables..."
-    export $(grep -v '^#' .env | xargs)
+    # Load .env file safely, ignoring comments and empty lines
+    while IFS= read -r line; do
+        # Skip empty lines and comments
+        if [[ -n "$line" && ! "$line" =~ ^[[:space:]]*# ]]; then
+            # Export the variable
+            export "$line"
+        fi
+    done < .env
 else
     warning ".env file not found. Make sure database credentials are set in environment"
 fi
