@@ -89,7 +89,7 @@ log "Testing database connection..."
 python -c "
 import sys
 sys.path.append('.')
-from app.database.session import engine
+from app.config.database import engine
 from sqlalchemy import text
 try:
     with engine.connect() as conn:
