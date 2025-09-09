@@ -11,12 +11,12 @@ class Settings(BaseSettings):
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 60 * 24 * 8  # 8 days
     ALGORITHM: str = "HS256"
 
-    # Database
-    DB_HOST: str = "localhost"
-    DB_PORT: str = "5432"
-    DB_NAME: str = "prozlab_db"
-    DB_USER: str = "proz_user"
-    DB_PASSWORD: str = "Root#2022"  # Default fallback, will be overridden by .env
+    # Database - These will be loaded from .env file
+    DB_HOST: str
+    DB_PORT: str
+    DB_NAME: str
+    DB_USER: str
+    DB_PASSWORD: str
     DATABASE_URL: Optional[str] = None
 
     # Email
