@@ -53,8 +53,13 @@ if [ -f ".env" ]; then
     while IFS= read -r line; do
         # Skip empty lines and comments
         if [[ -n "$line" && ! "$line" =~ ^[[:space:]]*# ]]; then
-            # Export the variable
-            export "$line"
+            # Remove inline comments (everything after # that's not in quotes)
+            # This handles cases like: MAX_FILE_SIZE=5242880  # 5MB
+            clean_line=$(echo "$line" | sed 's/[[:space:]]*#.*$//')
+            # Only export if there's still content after removing comments
+            if [[ -n "$clean_line" ]]; then
+                export "$clean_line"
+            fi
         fi
     done < .env
 else
