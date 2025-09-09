@@ -178,7 +178,7 @@ sleep 2
 
 # 16. Start the application
 log "Starting FastAPI application..."
-nohup venv/bin/uvicorn app.main:app --host 0.0.0.0 --port 8000 --workers 4 > logs/app.log 2>&1 &
+nohup venv/bin/uvicorn app.main:app --host 0.0.0.0 --port 9000 --workers 4 > logs/app.log 2>&1 &
 
 # 17. Wait for application to start
 log "Waiting for application to start..."
@@ -186,7 +186,7 @@ sleep 5
 
 # 18. Test application health
 log "Testing application health..."
-if curl -f -s http://localhost:8000/health > /dev/null; then
+if curl -f -s http://localhost:9000/health > /dev/null; then
     success "Application is running and healthy"
 else
     error "Application health check failed"
@@ -196,14 +196,14 @@ fi
 log "Testing critical API endpoints..."
 
 # Test email status endpoint
-if curl -f -s http://localhost:8000/api/v1/auth/email/status > /dev/null; then
+if curl -f -s http://localhost:9000/api/v1/auth/email/status > /dev/null; then
     success "Email status endpoint is working"
 else
     warning "Email status endpoint test failed"
 fi
 
 # Test database connection via API
-if curl -f -s http://localhost:8000/api/v1/auth/email/status | grep -q "smtp_configured"; then
+if curl -f -s http://localhost:9000/api/v1/auth/email/status | grep -q "smtp_configured"; then
     success "Database connection via API is working"
 else
     warning "Database connection via API test failed"
@@ -215,11 +215,11 @@ echo "=================="
 echo "✅ Dependencies installed"
 echo "✅ Environment variables loaded"
 echo "✅ Database migrations completed"
-echo "✅ Application started on port 8000"
+echo "✅ Application started on port 9000"
 echo "✅ Health checks passed"
 echo ""
-echo "Application URL: http://localhost:8000"
-echo "API Documentation: http://localhost:8000/docs"
+echo "Application URL: http://localhost:9000"
+echo "API Documentation: http://localhost:9000/docs"
 echo "Logs: tail -f logs/app.log"
 echo ""
 echo "To stop the application: pkill -f uvicorn"
@@ -239,7 +239,7 @@ success "Production deployment completed successfully!"
 # User=www-data
 # WorkingDirectory=$(pwd)
 # Environment=PATH=$(pwd)/venv/bin
-# ExecStart=$(pwd)/venv/bin/uvicorn app.main:app --host 0.0.0.0 --port 8000 --workers 4
+# ExecStart=$(pwd)/venv/bin/uvicorn app.main:app --host 0.0.0.0 --port 9000 --workers 4
 # Restart=always
 #
 # [Install]
