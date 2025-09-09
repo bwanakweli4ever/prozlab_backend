@@ -16,7 +16,7 @@ class Settings(BaseSettings):
     DB_PORT: str = "5432"
     DB_NAME: str = "prozlab_db"
     DB_USER: str = "proz_user"
-    DB_PASSWORD: str = "Root#2022"
+    DB_PASSWORD: str = "Root#2022"  # Default fallback, will be overridden by .env
     DATABASE_URL: Optional[str] = None
 
     # Email
@@ -60,7 +60,9 @@ class Settings(BaseSettings):
 
     class Config:
         env_file = ".env"
+        env_file_encoding = "utf-8"
         case_sensitive = True
+        extra = "ignore"  # Ignore extra fields in .env file
 
     @field_validator("ALLOWED_IMAGE_TYPES", mode="before")
     @classmethod
@@ -91,3 +93,14 @@ class Settings(BaseSettings):
 
 # at the very bottom:
 settings = Settings()
+
+# Debug: Print loaded values (remove this in production)
+if __name__ == "__main__":
+    print("=== Settings Debug ===")
+    print(f"DB_HOST: {settings.DB_HOST}")
+    print(f"DB_PORT: {settings.DB_PORT}")
+    print(f"DB_NAME: {settings.DB_NAME}")
+    print(f"DB_USER: {settings.DB_USER}")
+    print(f"DB_PASSWORD: {settings.DB_PASSWORD}")
+    print(f"Database URL: {settings.get_database_url}")
+    print("=====================")
