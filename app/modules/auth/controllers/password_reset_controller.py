@@ -8,8 +8,11 @@ from app.modules.auth.services.password_reset_service import PasswordResetServic
 from app.modules.auth.schemas.password_reset import (
     ForgotPasswordRequest,
     ResetPasswordRequest,
+    VerifyOTPRequest,
+    ResetPasswordWithOTPRequest,
     PasswordResetResponse,
-    ForgotPasswordResponse
+    ForgotPasswordResponse,
+    VerifyOTPResponse
 )
 
 router = APIRouter()
@@ -23,20 +26,21 @@ def forgot_password(
     request: ForgotPasswordRequest,
 ) -> Any:
     """
-    Request a password reset email.
+    Request a password reset OTP.
     
-    This endpoint will send a password reset email to the provided email address.
+    This endpoint will send a password reset OTP to the provided email address.
     For security reasons, it will always return success even if the email doesn't exist.
     """
     try:
-        result = password_reset_service.send_reset_email(db, request.email)
+        result = password_reset_service.send_reset_otp(db, request.email)
         
         if result["success"]:
             return ForgotPasswordResponse(
                 success=True,
                 message=result["message"],
                 development_mode=result.get("development_mode"),
-                token=result.get("token")
+                otp_code=result.get("otp_code"),
+                expires_at=result.get("expires_at")
             )
         else:
             raise HTTPException(
@@ -48,6 +52,80 @@ def forgot_password(
         raise
     except Exception as e:
         print(f"❌ Error in forgot password endpoint: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Internal server error. Please try again later."
+        )
+
+
+@router.post("/verify-otp", response_model=VerifyOTPResponse)
+def verify_otp(
+    *,
+    db: Session = Depends(get_db),
+    request: VerifyOTPRequest,
+) -> Any:
+    """
+    Verify password reset OTP.
+    
+    This endpoint verifies the OTP code sent to the user's email.
+    """
+    try:
+        result = password_reset_service.verify_reset_otp(db, request.email, request.otp_code)
+        
+        if result["success"]:
+            return VerifyOTPResponse(
+                success=True,
+                message=result["message"],
+                email=result.get("email"),
+                user_id=result.get("user_id")
+            )
+        else:
+            return VerifyOTPResponse(
+                success=False,
+                message=result["message"],
+                error_code=result.get("error_code"),
+                attempts_remaining=result.get("attempts_remaining")
+            )
+            
+    except Exception as e:
+        print(f"❌ Error in verify OTP endpoint: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Internal server error. Please try again later."
+        )
+
+
+@router.post("/reset-with-otp", response_model=PasswordResetResponse)
+def reset_password_with_otp(
+    *,
+    db: Session = Depends(get_db),
+    request: ResetPasswordWithOTPRequest,
+) -> Any:
+    """
+    Reset password using OTP.
+    
+    This endpoint resets the user's password using the verified OTP code.
+    """
+    try:
+        result = password_reset_service.reset_password_with_otp(
+            db, request.email, request.otp_code, request.new_password
+        )
+        
+        if result["success"]:
+            return PasswordResetResponse(
+                success=True,
+                message=result["message"]
+            )
+        else:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=result["message"]
+            )
+            
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"❌ Error in reset password with OTP endpoint: {str(e)}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Internal server error. Please try again later."

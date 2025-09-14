@@ -9,6 +9,7 @@ from app.modules.auth.models.user import User
 from app.modules.auth.models.password_reset import PasswordResetToken
 from app.modules.auth.repositories.user_repository import UserRepository
 from app.modules.auth.repositories.password_reset_repository import PasswordResetRepository
+from app.modules.auth.services.otp_service import OTPService
 from app.core.security import get_password_hash, verify_password
 from app.services.email_service import EmailService
 from app.core.exceptions import NotFoundException, AuthenticationException
@@ -20,6 +21,7 @@ class PasswordResetService:
     def __init__(self):
         self.user_repository = UserRepository()
         self.password_reset_repository = PasswordResetRepository()
+        self.otp_service = OTPService()
         self.email_service = EmailService()
     
     def _create_reset_email(self, email: str, token: str, user_name: str = None) -> tuple:
@@ -143,8 +145,8 @@ class PasswordResetService:
         
         return subject, html_body, text_body
     
-    def send_reset_email(self, db: Session, email: str) -> Dict[str, Any]:
-        """Send password reset email"""
+    def send_reset_otp(self, db: Session, email: str) -> Dict[str, Any]:
+        """Send password reset OTP via email"""
         try:
             # Check if user exists
             user = self.user_repository.get_by_email(db, email)
@@ -152,7 +154,7 @@ class PasswordResetService:
                 # Don't reveal if email exists or not for security
                 return {
                     "success": True,
-                    "message": "If an account with that email exists, a password reset link has been sent.",
+                    "message": "If an account with that email exists, a password reset OTP has been sent.",
                     "development_mode": self.email_service.development_mode
                 }
             
@@ -164,84 +166,49 @@ class PasswordResetService:
                     "error_code": "ACCOUNT_INACTIVE"
                 }
             
-            # Create password reset token
-            token_obj = self.password_reset_repository.create(
-                db=db, 
-                user_id=str(user.id), 
-                expires_in_hours=1
-            )
+            # Send OTP via email
+            result = self.otp_service.send_password_reset_otp(db, email)
             
-            if not token_obj:
+            if result["success"]:
+                return {
+                    "success": True,
+                    "message": result["message"],
+                    "development_mode": result.get("development_mode"),
+                    "otp_code": result.get("otp_code"),
+                    "expires_at": result.get("expires_at")
+                }
+            else:
                 return {
                     "success": False,
-                    "message": "Failed to create reset token. Please try again.",
-                    "error_code": "TOKEN_CREATION_FAILED"
+                    "message": result["message"],
+                    "error_code": result.get("error_code"),
+                    "error_details": result.get("error_details")
                 }
             
-            # Create email content
-            user_name = f"{user.first_name} {user.last_name}".strip() if user.first_name or user.last_name else None
-            subject, html_body, text_body = self._create_reset_email(email, token_obj.token, user_name)
-            
-            if self.email_service.development_mode:
-                # Development mode - log reset link
-                reset_url = f"http://localhost:8000/api/v1/auth/password/reset?token={token_obj.token}"
-                logger.info(f"📧 DEVELOPMENT MODE - Password reset for {email}")
-                logger.info(f"🔗 Reset URL: {reset_url}")
-                print(f"📧 DEVELOPMENT MODE - Password reset for {email}")
-                print(f"🔗 Reset URL: {reset_url}")
-                
-                message = "Password reset email sent (development mode). Check console for reset link."
-                
-            else:
-                # Production mode - send actual email
-                self.email_service._send_smtp_email(email, subject, html_body, text_body)
-                message = "Password reset email sent successfully"
-            
-            return {
-                "success": True,
-                "message": message,
-                "development_mode": self.email_service.development_mode,
-                "token": token_obj.token if self.email_service.development_mode else None
-            }
-            
         except Exception as e:
-            logger.error(f"Error sending password reset email to {email}: {str(e)}")
+            logger.error(f"Error sending password reset OTP to {email}: {str(e)}")
             return {
                 "success": False,
-                "message": "Failed to send password reset email",
-                "error_code": "EMAIL_SEND_FAILED",
+                "message": "Failed to send password reset OTP",
+                "error_code": "OTP_SEND_FAILED",
                 "error_details": str(e)
             }
     
-    def reset_password(self, db: Session, token: str, new_password: str) -> Dict[str, Any]:
-        """Reset password using token"""
+    def reset_password_with_otp(self, db: Session, email: str, otp_code: str, new_password: str) -> Dict[str, Any]:
+        """Reset password using OTP"""
         try:
-            # Get token from database
-            token_obj = self.password_reset_repository.get_by_token(db, token)
-            if not token_obj:
+            # Verify OTP first
+            otp_result = self.otp_service.verify_password_reset_otp(db, email, otp_code)
+            if not otp_result["success"]:
                 return {
                     "success": False,
-                    "message": "Invalid or expired reset token",
-                    "error_code": "INVALID_TOKEN"
+                    "message": otp_result["message"],
+                    "error_code": otp_result.get("error_code"),
+                    "attempts_remaining": otp_result.get("attempts_remaining")
                 }
             
-            # Check if token is valid
-            if not token_obj.is_valid:
-                if token_obj.is_used:
-                    return {
-                        "success": False,
-                        "message": "Reset token has already been used",
-                        "error_code": "TOKEN_USED"
-                    }
-                elif token_obj.is_expired:
-                    return {
-                        "success": False,
-                        "message": "Reset token has expired",
-                        "error_code": "TOKEN_EXPIRED"
-                    }
-            
             # Get user
-            user = self.user_repository.get_by_id(db, str(token_obj.user_id))
+            user = self.user_repository.get_by_email(db, email)
             if not user:
                 return {
                     "success": False,
@@ -264,11 +231,8 @@ class PasswordResetService:
             user.hashed_password = hashed_password
             db.commit()
             
-            # Mark token as used
-            self.password_reset_repository.mark_as_used(db, token)
-            
-            # Clean up expired tokens for this user
-            self.password_reset_repository.delete_expired_tokens(db)
+            # Clean up all OTPs for this email
+            self.otp_service.password_reset_otp_repo.delete_otps_for_email(db, email)
             
             logger.info(f"✅ Password reset successful for user: {user.email}")
             
@@ -286,6 +250,44 @@ class PasswordResetService:
                 "success": False,
                 "message": "Failed to reset password",
                 "error_code": "RESET_FAILED",
+                "error_details": str(e)
+            }
+    
+    def verify_reset_otp(self, db: Session, email: str, otp_code: str) -> Dict[str, Any]:
+        """Verify password reset OTP without resetting password"""
+        try:
+            result = self.otp_service.verify_password_reset_otp(db, email, otp_code)
+            
+            if result["success"]:
+                # Get user info
+                user = self.user_repository.get_by_email(db, email)
+                if user:
+                    return {
+                        "success": True,
+                        "message": "OTP verified successfully",
+                        "email": email,
+                        "user_id": str(user.id)
+                    }
+                else:
+                    return {
+                        "success": False,
+                        "message": "User not found",
+                        "error_code": "USER_NOT_FOUND"
+                    }
+            else:
+                return {
+                    "success": False,
+                    "message": result["message"],
+                    "error_code": result.get("error_code"),
+                    "attempts_remaining": result.get("attempts_remaining")
+                }
+                
+        except Exception as e:
+            logger.error(f"Error verifying reset OTP: {str(e)}")
+            return {
+                "success": False,
+                "message": "Failed to verify OTP",
+                "error_code": "VERIFICATION_FAILED",
                 "error_details": str(e)
             }
     

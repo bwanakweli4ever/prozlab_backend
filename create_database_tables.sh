@@ -210,3 +210,4 @@ echo "✅ Alembic migration tracking set up"
 echo ""
 echo "Your database is now ready for use!"
 echo "You can now run: ./deploy_production.sh"
+
