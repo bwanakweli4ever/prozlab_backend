@@ -54,6 +54,21 @@ fi
 echo "Applying password/OTP table fixes..."
 
 # Prefer DATABASE_URL; else use discrete PG* vars
+## Normalize common DB_* env names to PG* / DATABASE_URL when provided
+if [ -z "${DATABASE_URL:-}" ]; then
+  if [ -n "${DB_HOST:-}" ] && [ -n "${DB_PORT:-}" ] && [ -n "${DB_USER:-}" ] && [ -n "${DB_NAME:-}" ]; then
+    export PGHOST="${PGHOST:-$DB_HOST}"
+    export PGPORT="${PGPORT:-$DB_PORT}"
+    export PGUSER="${PGUSER:-$DB_USER}"
+    export PGPASSWORD="${PGPASSWORD:-${DB_PASSWORD:-}}"
+    export PGDATABASE="${PGDATABASE:-$DB_NAME}"
+    # Also construct a DATABASE_URL for convenience if password available
+    if [ -n "${PGPASSWORD:-}" ]; then
+      export DATABASE_URL="postgresql://${PGUSER}:${PGPASSWORD}@${PGHOST}:${PGPORT}/${PGDATABASE}"
+    fi
+  fi
+fi
+
 if [ -n "${DATABASE_URL:-}" ]; then
   psql_cmd=(psql "$DATABASE_URL")
 else
