@@ -453,47 +453,53 @@ class EmailService:
         logo = getattr(settings, 'BRAND_LOGO_URL', '')
         app_url = getattr(settings, 'APP_URL', 'https://prozlab.com')
 
+        # Build logo/header HTML separately to avoid backslashes in f-string expressions
+        if logo:
+            logo_html = f'<img src="{logo}" alt="Proz Lab" style="height:32px;display:block;"/>'
+        else:
+            logo_html = '<div style="font-family:Arial,Helvetica,sans-serif;font-weight:700;font-size:18px;letter-spacing:.3px;">Proz Lab</div>'
+
         html_body = f"""
         <!doctype html>
         <html>
           <head>
-            <meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\"/>
-            <meta http-equiv=\"Content-Type\" content=\"text/html; charset=UTF-8\"/>
+            <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+            <meta http-equiv="Content-Type" content="text/html; charset=UTF-8"/>
             <title>{subject}</title>
           </head>
-          <body style=\"margin:0;padding:0;background:#f3f4f6;\">
-            <table role=\"presentation\" cellpadding=\"0\" cellspacing=\"0\" width=\"100%\" style=\"background:#f3f4f6;\">
+          <body style="margin:0;padding:0;background:#f3f4f6;">
+            <table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="background:#f3f4f6;">
               <tr>
-                <td align=\"center\" style=\"padding:32px 16px;\">
-                  <table role=\"presentation\" cellpadding=\"0\" cellspacing=\"0\" width=\"100%\" style=\"max-width:680px;background:#ffffff;border-radius:16px;overflow:hidden;box-shadow:0 10px 30px rgba(0,0,0,.08);\">
+                <td align="center" style="padding:32px 16px;">
+                  <table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="max-width:680px;background:#ffffff;border-radius:16px;overflow:hidden;box-shadow:0 10px 30px rgba(0,0,0,.08);">
                     <tr>
-                      <td align=\"left\" style=\"background:{primary};padding:24px 28px;color:#ffffff;\">
-                        {('<img src=\\"' + logo + '\\" alt=\\"Proz Lab\\" style=\\"height:32px;display:block;\\"/>') if logo else '<div style=\\"font-family:Arial,Helvetica,sans-serif;font-weight:700;font-size:18px;letter-spacing:.3px;\\">Proz Lab</div>'}
-                        <div style=\"font-family:Arial,Helvetica,sans-serif;font-weight:800;font-size:22px;margin-top:8px;\">Welcome to the Proz Lab community</div>
+                      <td align="left" style="background:{primary};padding:24px 28px;color:#ffffff;">
+                        {logo_html}
+                        <div style="font-family:Arial,Helvetica,sans-serif;font-weight:800;font-size:22px;margin-top:8px;">Welcome to the Proz Lab community</div>
                       </td>
                     </tr>
                     <tr>
-                      <td style=\"padding:28px;\">
-                        <table role=\"presentation\" width=\"100%\" cellpadding=\"0\" cellspacing=\"0\">
+                      <td style="padding:28px;">
+                        <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
                           <tr>
-                            <td style=\"font-family:Arial,Helvetica,sans-serif;color:#1f2937;font-size:16px;line-height:1.8;\">
-                              <p style=\"margin:0 0 16px 0;color:#374151;\">Dear {display_name},</p>
-                              <p style=\"margin:0 0 14px 0;\">On behalf of the entire <strong>Proz Lab</strong> family, I warmly welcome you into our community of passionate professionals. At Proz Lab, we are more than just a platform—we are a living lab of creativity, innovation, and purpose.</p>
-                              <div style=\"margin:16px 0;padding:14px 16px;border-left:4px solid {accent};background:#f9fafb;border-radius:8px;color:#374151;\">
+                            <td style="font-family:Arial,Helvetica,sans-serif;color:#1f2937;font-size:16px;line-height:1.8;">
+                              <p style="margin:0 0 16px 0;color:#374151;">Dear {display_name},</p>
+                              <p style="margin:0 0 14px 0;">On behalf of the entire <strong>Proz Lab</strong> family, I warmly welcome you into our community of passionate professionals. At Proz Lab, we are more than just a platform—we are a living lab of creativity, innovation, and purpose.</p>
+                              <div style="margin:16px 0;padding:14px 16px;border-left:4px solid {accent};background:#f9fafb;border-radius:8px;color:#374151;">
                                 We exist with a zeal to design, build, develop, and deliver excellence in technology, not only for progress but also for the greater good of the communities we serve. We believe that technology is a bridge to a better tomorrow—a tool that makes life easier, empowers people, and sparks meaningful change.
                               </div>
-                              <p style=\"margin:0 0 14px 0;\">As you begin your journey with us, know that you are not just joining a platform—you are becoming part of a movement. A movement driven by passion, fueled by collaboration, and inspired by the belief that together, we can shape a brighter, better world through innovation.</p>
-                              <p style=\"margin:0 0 18px 0;\">Welcome aboard. Let’s create, let’s innovate, and let’s build change that matters.</p>
-                              <div style=\"margin-top:24px;color:#111827;\">
+                              <p style="margin:0 0 14px 0;">As you begin your journey with us, know that you are not just joining a platform—you are becoming part of a movement. A movement driven by passion, fueled by collaboration, and inspired by the belief that together, we can shape a brighter, better world through innovation.</p>
+                              <p style="margin:0 0 18px 0;">Welcome aboard. Let’s create, let’s innovate, and let’s build change that matters.</p>
+                              <div style="margin-top:24px;color:#111827;">
                                 <strong>With enthusiasm and gratitude,</strong><br/>
                                 Fabrice Rugogwe<br/>
                                 CEO, Proz Lab
                               </div>
-                              <p style=\"margin:22px 0 0 0;\">
-                                <a href=\"{app_url}\" style=\"display:inline-block;background:{accent};color:#ffffff;text-decoration:none;padding:12px 20px;border-radius:10px;font-weight:700;\">Explore your dashboard</a>
+                              <p style="margin:22px 0 0 0;">
+                                <a href="{app_url}" style="display:inline-block;background:{accent};color:#ffffff;text-decoration:none;padding:12px 20px;border-radius:10px;font-weight:700;">Explore your dashboard</a>
                               </p>
-                              <p style=\"margin:12px 0 0 0;color:#6b7280;font-size:13px;\">If the button doesn't work, copy and paste this link:<br/>
-                                <a href=\"{app_url}\" style=\"color:{primary};text-decoration:none;\">{app_url}</a>
+                              <p style="margin:12px 0 0 0;color:#6b7280;font-size:13px;">If the button doesn't work, copy and paste this link:<br/>
+                                <a href="{app_url}" style="color:{primary};text-decoration:none;">{app_url}</a>
                               </p>
                             </td>
                           </tr>
@@ -501,7 +507,7 @@ class EmailService:
                       </td>
                     </tr>
                     <tr>
-                      <td style=\"background:#f9fafb;padding:16px 28px;color:#6b7280;font-family:Arial,Helvetica,sans-serif;font-size:12px;\">
+                      <td style="background:#f9fafb;padding:16px 28px;color:#6b7280;font-family:Arial,Helvetica,sans-serif;font-size:12px;">
                         © {datetime.utcnow().year} Proz Lab. All rights reserved.
                       </td>
                     </tr>
