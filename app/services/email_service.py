@@ -4,6 +4,8 @@ import ssl
 import secrets
 import json
 from datetime import datetime, timedelta
+import os
+import http.client
 from typing import Optional, Dict, Any
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
@@ -30,8 +32,26 @@ rate_limit_storage = {}
 class EmailService:
     def __init__(self):
         self.smtp_configured = self._check_smtp_configuration()
-        self.development_mode = not self.smtp_configured
         
+        # Mailtrap API availability (load early to compute mode)
+        # Prefer settings, fall back to environment variables
+        self.mailtrap_api_key = getattr(settings, 'MAILTRAP_APIKEY', None) or os.getenv('MAILTRAP_APIKEY')
+        self.mailtrap_from_email = (
+            getattr(settings, 'MAILTRAP_FROM_EMAIL', None)
+            or os.getenv('MAILTRAP_FROM_EMAIL')
+            or getattr(settings, 'EMAIL_FROM', None)
+        )
+        self.mailtrap_from_name = (
+            getattr(settings, 'MAILTRAP_FROM_NAME', None)
+            or os.getenv('MAILTRAP_FROM_NAME')
+            or getattr(settings, 'PROJECT_NAME', 'ProzLab')
+        )
+        self.mailtrap_reply_email = getattr(settings, 'MAILTRAP_REPLY_EMAIL', None) or os.getenv('MAILTRAP_REPLY_EMAIL')
+        self.mailtrap_reply_name = getattr(settings, 'MAILTRAP_REPLY_NAME', None) or os.getenv('MAILTRAP_REPLY_NAME')
+
+        # Treat Mailtrap as production-capable as well
+        self.development_mode = not (self.smtp_configured or self.mailtrap_api_key)
+
         # Set up storage (Redis or in-memory)
         if REDIS_AVAILABLE:
             try:
@@ -52,7 +72,7 @@ class EmailService:
             logger.info("Email service running in DEVELOPMENT MODE")
         else:
             logger.info("Email service configured for production")
-    
+
     def _check_smtp_configuration(self) -> bool:
         """Check if SMTP is properly configured"""
         return all([
@@ -304,6 +324,11 @@ class EmailService:
         msg['Subject'] = subject
         msg['From'] = settings.EMAIL_FROM
         msg['To'] = to_email
+        # Dynamic Reply-To if configured via settings/env
+        reply_email = getattr(self, 'mailtrap_reply_email', None)
+        reply_name = getattr(self, 'mailtrap_reply_name', None)
+        if reply_email:
+            msg['Reply-To'] = f"{reply_name} <{reply_email}>" if reply_name else reply_email
         
         # Create text and HTML parts
         text_part = MIMEText(text_body, 'plain')
@@ -319,6 +344,181 @@ class EmailService:
             server.starttls(context=context)
             server.login(settings.SMTP_USER, settings.SMTP_PASSWORD)
             server.send_message(msg)
+
+    def _send_mailtrap_email(self, to_email: str, to_name: str, subject: str, text_body: str, html_body: Optional[str] = None, cc: Optional[list] = None, bcc: Optional[list] = None):
+        """Send email using Mailtrap Send API if configured."""
+        if not self.mailtrap_api_key:
+            raise RuntimeError("MAILTRAP_APIKEY not configured")
+
+        # Build payload
+        payload = {
+            "to": [{"email": to_email, "name": to_name or to_email}],
+            "from": {
+                "email": self.mailtrap_from_email,
+                "name": self.mailtrap_from_name,
+            },
+            "subject": subject,
+            "text": text_body or "",
+            "category": settings.PROJECT_NAME if hasattr(settings, 'PROJECT_NAME') else "App Email",
+        }
+
+        if html_body:
+            payload["html"] = html_body
+        if self.mailtrap_reply_email:
+            payload["reply_to"] = {"email": self.mailtrap_reply_email, "name": self.mailtrap_reply_name or self.mailtrap_reply_email}
+        if cc:
+            payload["cc"] = cc
+        if bcc:
+            payload["bcc"] = bcc
+
+        conn = http.client.HTTPSConnection("send.api.mailtrap.io")
+        headers = {
+            'Content-Type': 'application/json',
+            'Accept': 'application/json',
+            'Api-Token': self.mailtrap_api_key,
+        }
+        try:
+            conn.request("POST", "/api/send", json.dumps(payload), headers)
+            res = conn.getresponse()
+            data = res.read()
+            if res.status >= 400:
+                raise RuntimeError(f"Mailtrap send failed: {res.status} {data.decode('utf-8')}")
+        finally:
+            try:
+                conn.close()
+            except Exception:
+                pass
+
+    def send_email_to_proz_profile(self, proz_profile, subject: str, text_body: str, html_body: Optional[str] = None) -> Dict[str, Any]:
+        """Send an email to a Proz profile using Mailtrap if available, else SMTP.
+
+        proz_profile: instance with 'email', 'first_name', 'last_name'
+        """
+        try:
+            to_email = getattr(proz_profile, 'email', None)
+            first_name = getattr(proz_profile, 'first_name', '') or ''
+            last_name = getattr(proz_profile, 'last_name', '') or ''
+            to_name = (first_name + ' ' + last_name).strip() or to_email
+
+            if not to_email:
+                return {"success": False, "message": "Profile has no email"}
+
+            if self.mailtrap_api_key:
+                self._send_mailtrap_email(to_email=to_email, to_name=to_name, subject=subject, text_body=text_body, html_body=html_body)
+            else:
+                # Fallback to SMTP (build minimal bodies)
+                html_content = html_body or f"<p>{text_body}</p>"
+                self._send_smtp_email(to_email=to_email, subject=subject, html_body=html_content, text_body=text_body)
+
+            return {"success": True, "message": "Email sent"}
+
+        except Exception as e:
+            logger.error(f"Error sending email to proz profile {getattr(proz_profile, 'email', 'unknown')}: {str(e)}")
+            return {"success": False, "message": "Failed to send email", "error": str(e)}
+
+    def send_ceo_welcome_email(self, proz_profile) -> Dict[str, Any]:
+        """Send 'Welcome Message from the CEO' to a newly registered user (proz profile).
+
+        Uses Mailtrap if configured, otherwise SMTP. Safely handles missing name fields.
+        """
+        first_name = (getattr(proz_profile, 'first_name', '') or '').strip()
+        last_name = (getattr(proz_profile, 'last_name', '') or '').strip()
+        full_name = (first_name + ' ' + last_name).strip()
+        to_email = getattr(proz_profile, 'email', None)
+
+        if not to_email:
+            return {"success": False, "message": "Profile has no email"}
+
+        display_name = full_name if full_name else 'there'
+        subject = "Welcome Message from the CEO"
+
+        text_body = (
+            f"Dear {display_name},\n\n"
+            "On behalf of the entire Proz Lab family, I warmly welcome you into our community of passionate professionals. "
+            "At Proz Lab, we are more than just a platform—we are a living lab of creativity, innovation, and purpose.\n\n"
+            "We exist with a zeal to design, build, develop, and deliver excellence in technology, not only for progress "
+            "but also for the greater good of the communities we serve. We believe that technology is a bridge to a better "
+            "tomorrow—a tool that makes life easier, empowers people, and sparks meaningful change.\n\n"
+            "As you begin your journey with us, know that you are not just joining a platform—you are becoming part of a movement. "
+            "A movement driven by passion, fueled by collaboration, and inspired by the belief that together, we can shape a brighter, better world through innovation.\n\n"
+            "Welcome aboard. Let’s create, let’s innovate, and let’s build change that matters.\n\n"
+            "With enthusiasm and gratitude,\n"
+            "Fabrice Rugogwe\n"
+            "CEO, Proz Lab\n"
+        )
+
+        # Light theme, elegant layout (inline styles for email client compatibility)
+        primary = getattr(settings, 'BRAND_PRIMARY_COLOR', '#1F7A8C')
+        accent = getattr(settings, 'BRAND_ACCENT_COLOR', '#EC625F')
+        logo = getattr(settings, 'BRAND_LOGO_URL', '')
+        app_url = getattr(settings, 'APP_URL', 'https://prozlab.com')
+
+        html_body = f"""
+        <!doctype html>
+        <html>
+          <head>
+            <meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\"/>
+            <meta http-equiv=\"Content-Type\" content=\"text/html; charset=UTF-8\"/>
+            <title>{subject}</title>
+          </head>
+          <body style=\"margin:0;padding:0;background:#f3f4f6;\">
+            <table role=\"presentation\" cellpadding=\"0\" cellspacing=\"0\" width=\"100%\" style=\"background:#f3f4f6;\">
+              <tr>
+                <td align=\"center\" style=\"padding:32px 16px;\">
+                  <table role=\"presentation\" cellpadding=\"0\" cellspacing=\"0\" width=\"100%\" style=\"max-width:680px;background:#ffffff;border-radius:16px;overflow:hidden;box-shadow:0 10px 30px rgba(0,0,0,.08);\">
+                    <tr>
+                      <td align=\"left\" style=\"background:{primary};padding:24px 28px;color:#ffffff;\">
+                        {('<img src=\\"' + logo + '\\" alt=\\"Proz Lab\\" style=\\"height:32px;display:block;\\"/>') if logo else '<div style=\\"font-family:Arial,Helvetica,sans-serif;font-weight:700;font-size:18px;letter-spacing:.3px;\\">Proz Lab</div>'}
+                        <div style=\"font-family:Arial,Helvetica,sans-serif;font-weight:800;font-size:22px;margin-top:8px;\">Welcome to the Proz Lab community</div>
+                      </td>
+                    </tr>
+                    <tr>
+                      <td style=\"padding:28px;\">
+                        <table role=\"presentation\" width=\"100%\" cellpadding=\"0\" cellspacing=\"0\">
+                          <tr>
+                            <td style=\"font-family:Arial,Helvetica,sans-serif;color:#1f2937;font-size:16px;line-height:1.8;\">
+                              <p style=\"margin:0 0 16px 0;color:#374151;\">Dear {display_name},</p>
+                              <p style=\"margin:0 0 14px 0;\">On behalf of the entire <strong>Proz Lab</strong> family, I warmly welcome you into our community of passionate professionals. At Proz Lab, we are more than just a platform—we are a living lab of creativity, innovation, and purpose.</p>
+                              <div style=\"margin:16px 0;padding:14px 16px;border-left:4px solid {accent};background:#f9fafb;border-radius:8px;color:#374151;\">
+                                We exist with a zeal to design, build, develop, and deliver excellence in technology, not only for progress but also for the greater good of the communities we serve. We believe that technology is a bridge to a better tomorrow—a tool that makes life easier, empowers people, and sparks meaningful change.
+                              </div>
+                              <p style=\"margin:0 0 14px 0;\">As you begin your journey with us, know that you are not just joining a platform—you are becoming part of a movement. A movement driven by passion, fueled by collaboration, and inspired by the belief that together, we can shape a brighter, better world through innovation.</p>
+                              <p style=\"margin:0 0 18px 0;\">Welcome aboard. Let’s create, let’s innovate, and let’s build change that matters.</p>
+                              <div style=\"margin-top:24px;color:#111827;\">
+                                <strong>With enthusiasm and gratitude,</strong><br/>
+                                Fabrice Rugogwe<br/>
+                                CEO, Proz Lab
+                              </div>
+                              <p style=\"margin:22px 0 0 0;\">
+                                <a href=\"{app_url}\" style=\"display:inline-block;background:{accent};color:#ffffff;text-decoration:none;padding:12px 20px;border-radius:10px;font-weight:700;\">Explore your dashboard</a>
+                              </p>
+                              <p style=\"margin:12px 0 0 0;color:#6b7280;font-size:13px;\">If the button doesn't work, copy and paste this link:<br/>
+                                <a href=\"{app_url}\" style=\"color:{primary};text-decoration:none;\">{app_url}</a>
+                              </p>
+                            </td>
+                          </tr>
+                        </table>
+                      </td>
+                    </tr>
+                    <tr>
+                      <td style=\"background:#f9fafb;padding:16px 28px;color:#6b7280;font-family:Arial,Helvetica,sans-serif;font-size:12px;\">
+                        © {datetime.utcnow().year} Proz Lab. All rights reserved.
+                      </td>
+                    </tr>
+                  </table>
+                </td>
+              </tr>
+            </table>
+          </body>
+        </html>
+        """
+
+        return self.send_email_to_proz_profile(
+            proz_profile=proz_profile,
+            subject=subject,
+            text_body=text_body,
+            html_body=html_body,
+        )
     
     def verify_email_token(self, token: str) -> Dict[str, Any]:
         """Verify email token"""

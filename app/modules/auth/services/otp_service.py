@@ -159,17 +159,24 @@ class OTPService:
             # Create email content
             subject, html_body, text_body = self._create_password_reset_otp_email(email, otp_obj.otp_code)
             
-            if self.email_service.development_mode:
-                # Development mode - log OTP
-                logger.info(f"🔐 DEVELOPMENT MODE - Password reset OTP for {email}: {otp_obj.otp_code}")
-                print(f"🔐 DEVELOPMENT MODE - Password reset OTP for {email}: {otp_obj.otp_code}")
-                
-                message = "Password reset OTP sent (development mode). Check console for OTP."
-                
-            else:
-                # Production mode - send actual email
+            # If Mailtrap or SMTP is configured, send email; otherwise log in dev mode
+            if self.email_service.mailtrap_api_key:
+                self.email_service._send_mailtrap_email(
+                    to_email=email,
+                    to_name=email,
+                    subject=subject,
+                    text_body=text_body,
+                    html_body=html_body,
+                )
+                message = "Password reset OTP sent successfully"
+            elif self.email_service.smtp_configured and not self.email_service.development_mode:
                 self.email_service._send_smtp_email(email, subject, html_body, text_body)
                 message = "Password reset OTP sent successfully"
+            else:
+                # Development fallback
+                logger.info(f"🔐 DEVELOPMENT MODE - Password reset OTP for {email}: {otp_obj.otp_code}")
+                print(f"🔐 DEVELOPMENT MODE - Password reset OTP for {email}: {otp_obj.otp_code}")
+                message = "Password reset OTP sent (development mode). Check console for OTP."
             
             return {
                 "success": True,

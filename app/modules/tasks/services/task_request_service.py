@@ -339,20 +339,32 @@ class TaskRequestService:
             Task Management System
             """
             
-            # Send email
-            if self.email_service.development_mode:
-                logger.info(f"📧 DEVELOPMENT MODE - Task assignment email for {professional.email}")
-                logger.info(f"📧 Subject: {subject}")
-                print(f"📧 DEVELOPMENT MODE - Task assignment email for {professional.email}")
-                print(f"📧 Subject: {subject}")
-            else:
-                self.email_service._send_smtp_email(
-                    to_email=professional.email,
-                    subject=subject,
-                    html_body=html_body,
-                    text_body=text_body
-                )
-                logger.info(f"📧 Task assignment email sent to {professional.email}")
+            # Send email via Mailtrap if available, else SMTP, else log in dev mode
+            try:
+                if self.email_service.mailtrap_api_key:
+                    self.email_service._send_mailtrap_email(
+                        to_email=professional.email,
+                        to_name=f"{professional.first_name} {professional.last_name}".strip() or professional.email,
+                        subject=subject,
+                        text_body=text_body,
+                        html_body=html_body,
+                    )
+                    logger.info(f"📧 Task assignment email sent via Mailtrap to {professional.email}")
+                elif self.email_service.smtp_configured and not self.email_service.development_mode:
+                    self.email_service._send_smtp_email(
+                        to_email=professional.email,
+                        subject=subject,
+                        html_body=html_body,
+                        text_body=text_body
+                    )
+                    logger.info(f"📧 Task assignment email sent via SMTP to {professional.email}")
+                else:
+                    logger.info(f"📧 DEVELOPMENT MODE - Task assignment email for {professional.email}")
+                    logger.info(f"📧 Subject: {subject}")
+                    print(f"📧 DEVELOPMENT MODE - Task assignment email for {professional.email}")
+                    print(f"📧 Subject: {subject}")
+            except Exception as send_err:
+                logger.error(f"❌ Error sending assignment notification email: {send_err}")
             
         except Exception as e:
             logger.error(f"❌ Error sending assignment notification email: {str(e)}")
