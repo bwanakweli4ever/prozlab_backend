@@ -11,19 +11,39 @@
 
 set -euo pipefail
 
+# Optional: --env-file /path/to/.env to load a specific env file
+ENV_FILE=""
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --env-file)
+      shift
+      ENV_FILE="${1:-}"
+      shift || true
+      ;;
+    *)
+      # ignore unknown flags/args to keep script simple
+      shift
+      ;;
+  esac
+done
+
 # Auto-load environment from .env files if present (no hardcoding)
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-if [ -f "$SCRIPT_DIR/.env" ]; then
-  set -a
-  # shellcheck disable=SC1090
-  source "$SCRIPT_DIR/.env"
-  set +a
-fi
-if [ -f "$SCRIPT_DIR/.env.production" ]; then
-  set -a
-  # shellcheck disable=SC1090
-  source "$SCRIPT_DIR/.env.production"
-  set +a
+load_env_file() {
+  local f="$1"
+  if [ -f "$f" ]; then
+    set -a
+    # shellcheck disable=SC1090
+    source "$f"
+    set +a
+  fi
+}
+
+if [ -n "$ENV_FILE" ]; then
+  load_env_file "$ENV_FILE"
+else
+  load_env_file "$SCRIPT_DIR/.env"
+  load_env_file "$SCRIPT_DIR/.env.production"
 fi
 
 if ! command -v psql >/dev/null 2>&1; then
@@ -37,10 +57,12 @@ echo "Applying password/OTP table fixes..."
 if [ -n "${DATABASE_URL:-}" ]; then
   psql_cmd=(psql "$DATABASE_URL")
 else
-  : "${PGHOST:?PGHOST not set and DATABASE_URL missing}"
-  : "${PGPORT:?PGPORT not set and DATABASE_URL missing}"
-  : "${PGUSER:?PGUSER not set and DATABASE_URL missing}"
-  : "${PGDATABASE:?PGDATABASE not set and DATABASE_URL missing}"
+  if [ -z "${PGHOST:-}" ] || [ -z "${PGPORT:-}" ] || [ -z "${PGUSER:-}" ] || [ -z "${PGDATABASE:-}" ]; then
+    echo "ERROR: No DATABASE_URL set and required PG* vars missing." >&2
+    echo "Set DATABASE_URL or PGHOST, PGPORT, PGUSER, PGDATABASE (PGPASSWORD if needed)." >&2
+    echo "Tip: pass --env-file /path/to/.env to load your environment file." >&2
+    exit 2
+  fi
   # PGPASSWORD is read from env by psql if set
   psql_cmd=(psql -h "$PGHOST" -p "$PGPORT" -U "$PGUSER" -d "$PGDATABASE")
 fi
