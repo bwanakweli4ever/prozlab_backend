@@ -2,27 +2,50 @@
 
 # Apply idempotent SQL to fix/reset password-related tables on production
 # Usage:
+#   # With connection string:
 #   export DATABASE_URL="postgresql://user:pass@host:5432/dbname"
 #   ./reset_password.sh
-# Or rely on PG* env vars (PGHOST, PGPORT, PGUSER, PGPASSWORD, PGDATABASE)
+#   # Or with PG* env vars (can come from .env/.env.production):
+#   export PGHOST=host PGPORT=5432 PGUSER=user PGPASSWORD=pass PGDATABASE=dbname
+#   ./reset_password.sh
 
 set -euo pipefail
+
+# Auto-load environment from .env files if present (no hardcoding)
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+if [ -f "$SCRIPT_DIR/.env" ]; then
+  set -a
+  # shellcheck disable=SC1090
+  source "$SCRIPT_DIR/.env"
+  set +a
+fi
+if [ -f "$SCRIPT_DIR/.env.production" ]; then
+  set -a
+  # shellcheck disable=SC1090
+  source "$SCRIPT_DIR/.env.production"
+  set +a
+fi
 
 if ! command -v psql >/dev/null 2>&1; then
   echo "psql not found in PATH. Please install PostgreSQL client." >&2
   exit 1
 fi
 
-PSQL_TARGET=()
-if [ -n "${DATABASE_URL:-}" ]; then
-  PSQL_TARGET=("$DATABASE_URL")
-else
-  echo "DATABASE_URL not set. Falling back to PG* environment variables." >&2
-fi
-
 echo "Applying password/OTP table fixes..."
 
-psql "${PSQL_TARGET[@]}" <<'SQL'
+# Prefer DATABASE_URL; else use discrete PG* vars
+if [ -n "${DATABASE_URL:-}" ]; then
+  psql_cmd=(psql "$DATABASE_URL")
+else
+  : "${PGHOST:?PGHOST not set and DATABASE_URL missing}"
+  : "${PGPORT:?PGPORT not set and DATABASE_URL missing}"
+  : "${PGUSER:?PGUSER not set and DATABASE_URL missing}"
+  : "${PGDATABASE:?PGDATABASE not set and DATABASE_URL missing}"
+  # PGPASSWORD is read from env by psql if set
+  psql_cmd=(psql -h "$PGHOST" -p "$PGPORT" -U "$PGUSER" -d "$PGDATABASE")
+fi
+
+"${psql_cmd[@]}" <<'SQL'
 BEGIN;
 
 -- Ensure uuid type available (built-in on modern Postgres). Extensions not required for app-side UUID generation.
