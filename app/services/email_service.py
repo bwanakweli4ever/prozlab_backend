@@ -15,6 +15,13 @@ import logging
 
 from app.config.settings import settings
 
+# Optional .env loader so server runs pick up root .env without process-level export
+try:
+    from dotenv import load_dotenv  # type: ignore
+    DOTENV_AVAILABLE = True
+except Exception:
+    DOTENV_AVAILABLE = False
+
 logger = logging.getLogger(__name__)
 
 try:
@@ -31,6 +38,17 @@ rate_limit_storage = {}
 
 class EmailService:
     def __init__(self):
+        # Best-effort load of .env files if Mailtrap/SMTP envs not already present
+        if DOTENV_AVAILABLE:
+            try:
+                # Load from CWD and project root (two levels up from this file: app/services/.. -> project root)
+                project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..', '..'))
+                load_dotenv(os.path.join(project_root, '.env'), override=False)
+                load_dotenv(os.path.join(project_root, '.env.production'), override=False)
+                load_dotenv(os.path.join(os.getcwd(), '.env'), override=False)
+            except Exception:
+                pass
+
         self.smtp_configured = self._check_smtp_configuration()
         
         # Mailtrap API availability (load early to compute mode)
